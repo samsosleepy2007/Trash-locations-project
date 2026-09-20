@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#0c5f44">
+<title>แผนที่จุดตั้งถังขยะ | NRRU</title>
+<style>
+:root{--g:#0c5f44;--g2:#087754;--gs:#eaf5ef;--y:#f3ad24;--ink:#16372b;--mut:#6f8178;--line:#dce9e2;--shadow:0 18px 48px rgba(14,66,48,.12)}
+*{box-sizing:border-box}html{scroll-behavior:smooth}body{margin:0;font-family:"Noto Sans Thai","Sarabun",Tahoma,system-ui,sans-serif;color:var(--ink);background:linear-gradient(180deg,#f9fcfa,#edf5f0);min-height:100vh}
+button,input{font:inherit}button{touch-action:manipulation}.top{position:sticky;top:0;z-index:50;background:rgba(255,255,255,.92);border-bottom:1px solid rgba(12,95,68,.1);backdrop-filter:blur(14px)}
+.topin{max-width:1500px;margin:auto;padding:14px 20px;display:flex;align-items:center;justify-content:space-between;gap:16px}.brand{display:flex;align-items:center;gap:12px}.logo{width:44px;height:44px;border-radius:15px;display:grid;place-items:center;background:linear-gradient(145deg,var(--g),#14916a);color:#fff;font-size:22px;box-shadow:0 8px 22px rgba(12,95,68,.22)}
+h1{font-size:clamp(19px,2.2vw,30px);margin:0;color:var(--g)}.sub{font-size:12px;color:var(--mut);margin-top:2px}.pill{padding:9px 13px;border-radius:999px;background:var(--gs);color:var(--g);font-weight:800;font-size:12px;border:1px solid #cfe5d8}
+main{max-width:1500px;margin:auto;padding:18px 20px 30px}.hero{display:flex;justify-content:space-between;align-items:end;gap:16px;margin:5px 0 14px}.hero h2{margin:0;font-size:clamp(21px,2.6vw,34px);color:var(--g)}.hero p{margin:5px 0 0;color:var(--mut);font-size:13px}.legend{font-size:12px;color:var(--mut);white-space:nowrap}.legend i{display:inline-block;width:10px;height:10px;border-radius:50%;background:var(--g);margin-right:5px}
+.app{display:grid;grid-template-columns:320px minmax(0,1fr);gap:16px;align-items:start}.side{background:#fff;border:1px solid var(--line);border-radius:22px;padding:12px;box-shadow:var(--shadow);position:sticky;top:82px;max-height:calc(100vh - 102px);overflow:hidden;display:flex;flex-direction:column}
+.search{display:flex;gap:8px;align-items:center;border:1px solid var(--line);background:#f8fbf9;border-radius:14px;padding:0 12px;margin-bottom:10px}.search input{width:100%;padding:11px 2px;border:0;outline:0;background:transparent}.list{overflow:auto;padding-right:3px}.card{width:100%;border:1px solid transparent;background:#fff;border-radius:15px;padding:10px;display:grid;grid-template-columns:38px 1fr;gap:10px;text-align:left;cursor:pointer;margin:5px 0;transition:.16s;color:inherit}.card:hover{background:#f6faf7;border-color:#d8e8df}.card.active{background:var(--gs);border-color:#a9d2bc;box-shadow:inset 0 0 0 1px #a9d2bc}
+.num{width:36px;height:36px;border-radius:50%;display:grid;place-items:center;color:#fff;background:var(--g);font-weight:900;font-size:13px;box-shadow:0 5px 12px rgba(12,95,68,.2)}.copy strong{display:block;color:var(--g);font-size:14px}.copy small{display:block;color:var(--mut);font-size:11px;margin-top:3px}
+.panel{background:#fff;border:1px solid var(--line);border-radius:22px;padding:10px;box-shadow:var(--shadow);overflow:hidden}.toolbar{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:4px 4px 10px}.toolbar strong{color:var(--g);font-size:13px}.toolbar span{color:var(--mut);font-size:11px}.scroll{overflow:auto;border-radius:16px;background:#eff4f0}.wrap{position:relative;width:min(100%,1100px);margin:auto;min-width:680px}.wrap>img{display:block;width:100%;height:auto;user-select:none;-webkit-user-drag:none}
+.pin{position:absolute;transform:translate(-50%,-50%);width:30px;height:30px;border:3px solid #fff;border-radius:50%;background:var(--g);color:#fff;font-weight:900;font-size:10px;display:grid;place-items:center;cursor:pointer;z-index:8;box-shadow:0 4px 12px rgba(0,0,0,.3);transition:.16s}.pin:hover,.pin.active{transform:translate(-50%,-50%) scale(1.18);background:var(--g2)}
+.pop{position:absolute;z-index:20;width:340px;max-width:calc(100% - 18px);background:#fff;border:1px solid #d4e5db;border-radius:18px;box-shadow:0 18px 44px rgba(8,54,39,.26);overflow:hidden;display:none}.pop.show{display:block;animation:pop .17s ease-out}@keyframes pop{from{opacity:0;transform:translateY(5px) scale(.985)}to{opacity:1;transform:none}}
+.ph{display:flex;justify-content:space-between;gap:10px;padding:13px 14px 10px}.kick{font-size:10px;font-weight:900;color:var(--y);letter-spacing:.08em}.ph h3{margin:2px 0 0;color:var(--g);font-size:20px}.close{width:30px;height:30px;border:0;border-radius:50%;background:#edf5f0;color:var(--g);cursor:pointer;font-size:20px}
+.gallery{position:relative;aspect-ratio:16/9;background:linear-gradient(135deg,rgba(12,95,68,.88),rgba(25,128,91,.78));display:grid;place-items:center;color:#fff;overflow:hidden}.gallery img{width:100%;height:100%;object-fit:cover;display:block}.emptyphoto{text-align:center;padding:16px}.emptyphoto span{font-size:38px}.emptyphoto b{display:block;margin-top:6px;font-size:13px}.nav{position:absolute;inset:0;display:flex;justify-content:space-between;align-items:center;padding:8px;pointer-events:none}.nav button{pointer-events:auto;border:0;width:34px;height:34px;border-radius:50%;background:rgba(0,0,0,.48);color:#fff;cursor:pointer}.dots{position:absolute;left:50%;bottom:8px;transform:translateX(-50%);display:flex;gap:5px}.dot{width:7px;height:7px;border-radius:50%;background:rgba(255,255,255,.55)}.dot.on{background:#fff}
+.pb{padding:12px 14px 14px}.desc{margin:0;color:#415a4f;font-size:13px;line-height:1.6}.chips{display:flex;gap:7px;flex-wrap:wrap;margin-top:10px}.chip{font-size:10px;background:#f3f8f5;border:1px solid #e2eee7;border-radius:999px;padding:6px 8px;color:#557065}.empty{padding:20px;text-align:center;color:var(--mut);font-size:13px}footer{max-width:1500px;margin:auto;padding:0 20px 25px;color:#84928b;font-size:11px;text-align:center}
+@media(max-width:900px){main{padding:12px}.hero{align-items:flex-start;flex-direction:column}.app{grid-template-columns:1fr}.side{position:static;max-height:none}.list{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:5px;max-height:300px}.card{margin:0}.wrap{min-width:760px}}
+@media(max-width:600px){.topin{padding:10px 12px}.logo{width:39px;height:39px}.sub{display:none}.pill{font-size:10px;padding:7px 9px}.list{grid-template-columns:1fr;max-height:260px}.panel,.side{border-radius:17px}.wrap{min-width:700px}.pop{width:290px}}
+</style>
+</head>
+<body>
+<header class="top"><div class="topin"><div class="brand"><div class="logo">🗑️</div><div><h1>แผนที่จุดตั้งถังขยะ</h1><div class="sub">มหาวิทยาลัยราชภัฏนครราชสีมา</div></div></div><div class="pill"><span id="count">10</span> จุด</div></div></header>
+<main>
+<section class="hero"><div><h2>ค้นหาจุดทิ้งขยะได้ง่ายบนแผนที่</h2><p>เลือกจากรายชื่อด้านซ้าย หรือกดหมุดบนแผนที่เพื่อดูรายละเอียดและรูปภาพ</p></div><div class="legend"><i></i> หมุดสีเขียว = จุดตั้งถังขยะ</div></section>
+<section class="app">
+<aside class="side"><label class="search">⌕<input id="q" type="search" placeholder="ค้นหาชื่อจุด..." autocomplete="off"></label><div class="list" id="list"></div></aside>
+<section class="panel"><div class="toolbar"><strong>แผนผังตำแหน่ง</strong><span>เลื่อนซ้าย-ขวาได้บนหน้าจอขนาดเล็ก</span></div><div class="scroll"><div class="wrap" id="wrap">
+<img id="map" src="https://www.nrru.ac.th/storage/upEditor/9339480d2aad7a074692061754af04e9.jpg" alt="แผนผังมหาวิทยาลัยราชภัฏนครราชสีมา">
+<div class="pop" id="pop"><div class="ph"><div><div class="kick">จุดตั้งถังขยะ</div><h3 id="pt"></h3></div><button class="close" id="x">×</button></div><div class="gallery" id="gal"></div><div class="pb"><p class="desc" id="pd"></p><div class="chips"><span class="chip">📍 ภายในมหาวิทยาลัย</span><span class="chip" id="pc"></span></div></div></div>
+</div></div></section>
+</section>
+</main>
+<footer>แผนที่จุดตั้งถังขยะ • NRRU</footer>
+<script>
+const P=[
+{n:1,id:"mu0f8jg89iqdk5",name:"อาคาร 32",desc:"ถังขยะแยกประเภท",x:41.135,y:55.741},
+{n:2,id:"mu0fd3kduzflh5",name:"ข้างอาคาร 22",desc:"ถังขยะแยกประเภท",x:77.915,y:53.897},
+{n:3,id:"mu0fi90w8likrg",name:"อาคาร 27",desc:"ถังขยะแยกประเภท",x:38.129,y:67.363},
+{n:4,id:"mu0flpiwazkdz9",name:"อาคาร 11",desc:"ถังขยะแยกประเภท",x:59.024,y:61.472},
+{n:5,id:"mu9oql7p91fx18",name:"สนามวอลเล่ย์บอล",desc:"ถังขยะแยกประเภท",x:38.55,y:10.989},
+{n:6,id:"mu9oupvubhful0",name:"อาคาร 13",desc:"ถังขยะแยกประเภท",x:78.568,y:58.087},
+{n:7,id:"mu9oyrmofx1i0y",name:"อาคาร 38",desc:"ถังขยะแยกประเภท",x:60.685,y:56.393},
+{n:8,id:"mu9p22eeagneg0",name:"อาคาร 36",desc:"ถังขยะแยกประเภท",x:49.805,y:78.462},
+{n:9,id:"mu9p4ryqk72n0j",name:"สนามวิ่ง 1",desc:"ถังขยะแยกประเภท",x:51.03,y:24.631},
+{n:10,id:"mu9p6vpkz5y50s",name:"โดมสนามกีฬา",desc:"ถังขยะแยกประเภท",x:48.8,y:40.504}
+];
+const list=document.getElementById("list"),wrap=document.getElementById("wrap"),pop=document.getElementById("pop"),pt=document.getElementById("pt"),pd=document.getElementById("pd"),gal=document.getElementById("gal"),pc=document.getElementById("pc"),q=document.getElementById("q");let active=null,photos=[],photoIndex=0;
+const esc=s=>String(s??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;"}[m]));
+function candidates(n){return ["image/"+n+".png","image/"+n+"-1.png","image/"+n+"-2.png","image/"+n+"-3.png","image/"+n+"-4.png","image/"+n+"-5.png"];}
+function exists(src){return new Promise(r=>{const i=new Image();i.onload=()=>r(src);i.onerror=()=>r(null);i.src=src+"?v=1";});}
+async function loadPhotos(n){const c=candidates(n),single=await exists(c[0]);if(single)return [single];const multi=await Promise.all(c.slice(1).map(exists));return multi.filter(Boolean);}
+function renderGallery(){pc.textContent=photos.length?"🖼️ "+photos.length+" รูป":"🖼️ ยังไม่มีรูป";if(!photos.length){gal.innerHTML='<div class="emptyphoto"><span>📍🗑️</span><b>ยังไม่มีรูปตำแหน่งนี้</b></div>';return}gal.innerHTML='<img src="'+esc(photos[photoIndex])+'" alt="ภาพตำแหน่ง"><div class="dots">'+photos.map((_,i)=>'<i class="dot '+(i===photoIndex?"on":"")+'"></i>').join("")+'</div>'+(photos.length>1?'<div class="nav"><button id="prev">‹</button><button id="next">›</button></div>':"");if(photos.length>1){document.getElementById("prev").onclick=e=>{e.stopPropagation();photoIndex=(photoIndex-1+photos.length)%photos.length;renderGallery()};document.getElementById("next").onclick=e=>{e.stopPropagation();photoIndex=(photoIndex+1)%photos.length;renderGallery()}}}
+function clear(){document.querySelectorAll(".pin,.card").forEach(e=>e.classList.remove("active"))}
+function renderList(){const s=q.value.trim().toLowerCase(),v=P.filter(p=>(p.name+" "+p.desc).toLowerCase().includes(s));list.innerHTML=v.length?v.map(p=>'<button class="card '+(active===p.id?"active":"")+'" data-id="'+p.id+'"><span class="num">'+p.n+'</span><span class="copy"><strong>'+esc(p.name)+'</strong><small>'+esc(p.desc)+'</small></span></button>').join(""):'<div class="empty">ไม่พบตำแหน่งที่ค้นหา</div>';document.querySelectorAll(".card").forEach(b=>b.onclick=()=>openPoint(b.dataset.id))}
+function pins(){P.forEach(p=>{const b=document.createElement("button");b.className="pin";b.dataset.id=p.id;b.style.left=p.x+"%";b.style.top=p.y+"%";b.textContent=p.n;b.onclick=e=>{e.stopPropagation();openPoint(p.id)};wrap.insertBefore(b,pop)})}
+function position(pin){const g=10,w=wrap.clientWidth,h=wrap.clientHeight,pw=pop.offsetWidth,ph=pop.offsetHeight;let l=pin.offsetLeft+20,t=pin.offsetTop-ph/2;if(l+pw+g>w)l=pin.offsetLeft-pw-20;l=Math.max(g,Math.min(l,w-pw-g));t=Math.max(g,Math.min(t,h-ph-g));pop.style.left=l+"px";pop.style.top=t+"px"}
+async function openPoint(id){const p=P.find(x=>x.id===id);if(!p)return;active=id;pt.textContent=p.name;pd.textContent=p.desc;photos=[];photoIndex=0;renderGallery();clear();document.querySelectorAll('[data-id="'+id+'"]').forEach(e=>e.classList.add("active"));pop.classList.add("show");renderList();const pin=document.querySelector('.pin[data-id="'+id+'"]');requestAnimationFrame(()=>position(pin));photos=await loadPhotos(p.n);if(active===id){photoIndex=0;renderGallery()}}
+function close(){active=null;pop.classList.remove("show");clear();renderList()}
+q.oninput=renderList;document.getElementById("x").onclick=e=>{e.stopPropagation();close()};document.addEventListener("click",e=>{if(!pop.contains(e.target)&&!e.target.closest(".pin")&&!e.target.closest(".card"))close()});window.addEventListener("resize",()=>{if(active&&pop.classList.contains("show"))position(document.querySelector('.pin[data-id="'+active+'"]'))});pins();renderList();
+</script>
+</body>
+</html>
