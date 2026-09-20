@@ -16,10 +16,11 @@ The activity site remains a static GitHub Pages site. Account authentication is 
 ## Activity behavior
 
 - The first saved display name, faculty and major are immutable.
-- Evidence remains in the private `activity-proofs` Storage bucket.
-- The browser cannot upload or read evidence directly. The `activity-files` Edge Function validates the custom session, then uses server credentials to upload proof, create short-lived admin proof URLs, or upload prize images.
+- Evidence and prize images are uploaded by the `activity-files` Edge Function to ImgBB. The browser never receives the ImgBB API key.
+- PostgreSQL stores ImgBB `data.url` direct image URLs (`https://i.ibb.co/...`) for evidence/prize images.
+- The ImgBB API key is stored only in `activity_private.integration_secrets`; never commit it to GitHub or `activity-config.js`.
 - Evidence accepts JPEG, PNG or WebP up to 8 MiB.
-- A submission is accepted only while the campaign is enabled and before its deadline.
+- A submission is accepted only while the campaign is enabled and before its deadline. If an admin enables a brand-new campaign without an end time, the backend defaults the deadline to seven days in the future.
 - Approved submissions add exactly one point. Repeated review cannot add another point.
 - Rejected submissions require a non-empty reason. The reason appears in that participant's private activity history; there is no email notification dependency.
 - Public leaderboard output contains only display name, faculty, major and approved points.
@@ -27,11 +28,12 @@ The activity site remains a static GitHub Pages site. Account authentication is 
 ## Deployment
 
 1. Apply every SQL migration in `supabase/migrations/`. The student-auth migration rewires existing profile/submission ownership from `auth.users` to the first-party account table.
-2. Deploy `supabase/functions/activity-files/index.ts` with JWT verification disabled. This is intentional because it validates the opaque `x-activity-session` token against PostgreSQL itself.
-3. No SMTP, email redirect URL, Resend key, scheduler secret or Supabase Email Auth configuration is needed.
-4. Set `activity-config.js` to `enabled: true` only after the migration and `activity-files` function are live.
-5. Open `activity.html`, create a real test account, submit a test image, then sign in to `admin.html` using the allowlisted student ID and verify approve/reject flows.
-6. Enable the campaign and set deadline/prize details from `admin.html`.
+2. Store the ImgBB API key in `activity_private.integration_secrets` under the name `imgbb_api_key`. Do not put the key in frontend files or Git history.
+3. Deploy `supabase/functions/activity-files/index.ts` with JWT verification disabled. It validates the opaque `x-activity-session` token, obtains the ImgBB key using a service-role-only RPC, uploads with ImgBB API v1, and returns only the direct image URL.
+4. No SMTP, email redirect URL, Resend key, scheduler secret or Supabase Email Auth configuration is needed.
+5. Set `activity-config.js` to `enabled: true` only after the migration, ImgBB key and `activity-files` function are live.
+6. Open `activity.html`, create a real test account, submit a test image, then sign in to `admin.html` using the allowlisted student ID and verify approve/reject flows.
+7. Enable the campaign and set deadline/prize details from `admin.html`. A missing first deadline is prefilled to seven days from the current time.
 
 ## Adding another admin
 
@@ -47,6 +49,6 @@ Removing an ID from that table removes admin permission on the next session chec
 
 ## Validation
 
-`npm ci && npm run build && npm run test:activities` validates registration/login, password/session behavior, immutable profiles, private submissions, admin authorization, review rules and leaderboard scoring using PGlite stubs for pgcrypto.
+`npm ci && npm run build && npm run test:activities` validates registration/login, password/session behavior, private ImgBB secret access, direct-image URL validation, automatic campaign deadline, immutable profiles, admin authorization, review rules and leaderboard scoring using PGlite stubs for pgcrypto.
 
 `node scripts/verify-activities-browser.mjs` validates login/register UX, first submission, returning profile lock, admin review, desktop/mobile layouts and closed-campaign behavior with mocked network calls.

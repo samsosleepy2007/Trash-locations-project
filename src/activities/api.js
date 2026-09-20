@@ -29,7 +29,12 @@ export function readableError(error){
   SUBMISSION_CONFLICT:'รหัสการส่งซ้ำกับรายการอื่น กรุณาลองใหม่',
   INVALID_IMAGE_TYPE:'รองรับเฉพาะ JPG, PNG หรือ WebP',
   IMAGE_TOO_LARGE:'รูปต้องมีขนาดไม่เกิน 8 MB',
-  UPLOAD_FAILED:'อัปโหลดรูปไม่สำเร็จ กรุณาลองใหม่'
+  UPLOAD_FAILED:'อัปโหลดรูปไม่สำเร็จ กรุณาลองใหม่',
+  INVALID_PHOTO_URL:'ลิงก์รูปหลักฐานไม่ถูกต้อง',
+  INVALID_PRIZE_URL:'ลิงก์รูปของรางวัลไม่ถูกต้อง',
+  IMAGE_HOST_NOT_CONFIGURED:'ระบบฝากรูปยังไม่ได้ตั้งค่า กรุณาติดต่อผู้ดูแล',
+  IMAGE_HOST_UNAVAILABLE:'เชื่อมต่อบริการฝากรูปไม่ได้ กรุณาลองใหม่',
+  IMAGE_HOST_UPLOAD_FAILED:'ImgBB อัปโหลดรูปไม่สำเร็จ กรุณาลองใหม่'
  };
  for(const [code,message] of Object.entries(messages))if(text.includes(code))return message;
  if(/fetch|network/i.test(text))return 'เชื่อมต่อไม่สำเร็จ กรุณาตรวจอินเทอร์เน็ตแล้วลองใหม่';
@@ -70,7 +75,7 @@ export async function submitActivity(id,campaign,path){return checked(client.rpc
 export async function adminQueue(){return checked(client.rpc('activity_admin_queue',{p_session:sessionToken()}));}
 export async function reviewActivity(id,decision,note){return checked(client.rpc('activity_review',{p_session:sessionToken(),p_id:id,p_decision:decision,p_note:note}));}
 export async function saveSettings({title,enabled,ends,caption,prize}){return checked(client.rpc('activity_settings',{p_session:sessionToken(),p_title:title,p_enabled:enabled,p_ends:ends,p_caption:caption,p_prize:prize}));}
-export function prizeURL(path){return path&&client?client.storage.from('activity-prizes').getPublicUrl(path).data.publicUrl:null;}
+export function prizeURL(path){return /^https:\/\/i\.ibb\.co\//.test(path||'')?path:null;}
 export async function validateImage(file){
  if(!file||!['image/jpeg','image/png','image/webp'].includes(file.type))throw Error('กรุณาเลือกรูป JPG, PNG หรือ WebP');
  if(file.size>8*1024*1024)throw Error('รูปต้องมีขนาดไม่เกิน 8 MB');
