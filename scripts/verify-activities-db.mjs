@@ -57,21 +57,28 @@ assert.equal(profile.display_name,'ชื่อทดสอบ');
 await rpc("select activity_save_profile($1,'ชื่อทดสอบ','วิทยาศาสตร์','คอมพิวเตอร์')",[login.session_token]);
 await denied('anon',"select activity_save_profile($1,'ชื่อใหม่','วิทยาศาสตร์','คอมพิวเตอร์')",[login.session_token],/PROFILE_LOCKED/);
 await denied('anon',"select * from activity_profiles",[],/permission denied/);
+await db.query("insert into activity_private.integration_secrets(name,secret_value) values('imgbb_api_key','test-secret')");
+await denied('anon',"select activity_imgbb_key()",[],/permission denied/);
+assert.equal(row(await as('service_role',"select activity_imgbb_key() as secret")).secret,'test-secret');
 
 const campaign=row(await db.query('select id from activity_campaigns')).id;
 await denied('anon',"select activity_settings($1,'ทดสอบ',true,now()+interval '1 day','รางวัล',null)",[login.session_token],/ADMIN_REQUIRED/);
-await rpc("select activity_settings($1,'ทดสอบ',true,now()+interval '1 day','รางวัล',null)",[admin.session_token]);
+await rpc("select activity_settings($1,'ทดสอบ',true,null,'รางวัล',null)",[admin.session_token]);
+const started=row(await db.query("select enabled,ends_at from activity_campaigns where id=$1",[campaign]));
+assert.equal(started.enabled,true);
+assert.ok(new Date(started.ends_at).getTime()>Date.now()+6*24*3600*1000);
+await denied('anon',"select activity_settings($1,'ทดสอบ',true,now()+interval '1 day','รางวัล','https://example.com/prize.jpg')",[admin.session_token],/INVALID_PRIZE_URL/);
 
 async function submit(n){
  const id=`aaaaaaaa-aaaa-4aaa-8aaa-${String(n).padStart(12,'0')}`;
- const path=`${student.user_id}/${id}.jpg`;
- await db.query("insert into storage.objects(bucket_id,name) values('activity-proofs',$1)",[path]);
+ const path=`https://i.ibb.co/test-${n}/proof-${n}.jpg`;
  await rpc('select activity_submit($1,$2,$3,$4)',[login.session_token,id,campaign,path]);
  return {id,path};
 }
 const first=await submit(1),second=await submit(2);
 await rpc('select activity_submit($1,$2,$3,$4)',[login.session_token,first.id,campaign,first.path]);
 assert.equal(row(await db.query('select count(*)::int as n from activity_submissions')).n,2);
+assert.equal(row(await db.query('select count(*)::int as n from activity_submissions where proof_object_id is null')).n,2);
 assert.equal((await rpc('select * from activity_own_history($1)',[login.session_token])).rows.length,2);
 
 const queue=await rpc('select * from activity_admin_queue($1)',[admin.session_token]);
@@ -95,4 +102,4 @@ await denied('anon',"select * from activity_own_history($1)",[login.session_toke
 await denied('anon',"select activity_settings($1,'ทดสอบ',true,now()-interval '1 hour','รางวัล',null)",[admin.session_token],/END_TIME_MUST_BE_FUTURE/);
 
 await db.close();
-console.log('PASS: student ID registration/login, hashed credentials, opaque sessions, immutable profile, admin allowlist, private submissions, review reasons and leaderboard.');
+console.log('PASS: student ID auth, private secrets, ImgBB direct URLs, automatic campaign deadline, immutable profiles, admin review and leaderboard.');
