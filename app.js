@@ -49,17 +49,20 @@ function renderList() {
     pin.classList.toggle('active', active === pin.dataset.id);
   });
 }
-function stopTimer() { clearInterval(timer); timer = null; }
+function stopTimer() { clearInterval(timer); timer = null; document.dispatchEvent(new CustomEvent('campus:playback', {detail:{playing:false}})); }
 function startTimer() {
   stopTimer();
   if (dialog.open && photos.length > 1 && !paused && !document.hidden) {
     timer = setInterval(() => showPhoto(photoIndex + 1), 3000);
+    document.dispatchEvent(new CustomEvent('campus:playback', {detail:{playing:true}}));
   }
 }
 function showPhoto(index) {
   if (!photos.length) return;
   photoIndex = (index + photos.length) % photos.length;
-  $('slides').querySelectorAll('.slide').forEach((slide,i) => {
+  const event = new CustomEvent('campus:photo', {cancelable:true, detail:{index:photoIndex}});
+  document.dispatchEvent(event);
+  if (!event.defaultPrevented) $('slides').querySelectorAll('.slide').forEach((slide,i) => {
     slide.classList.toggle('current', i === photoIndex);
     slide.setAttribute('aria-hidden', String(i !== photoIndex));
   });
@@ -75,7 +78,9 @@ function updatePause() {
   startTimer();
 }
 function renderGallery(point) {
-  $('slides').innerHTML = photos.map((src,i) => `<img class="slide" src="${src}" alt="${esc(point.name)} ภาพที่ ${i + 1}" aria-hidden="true">`).join('');
+  const event = new CustomEvent('campus:gallery', {cancelable:true, detail:{point, photos}});
+  document.dispatchEvent(event);
+  if (!event.defaultPrevented) $('slides').innerHTML = photos.map((src,i) => `<img class="slide" src="${src}" alt="${esc(point.name)} ภาพที่ ${i + 1}" aria-hidden="true">`).join('');
   $('dots').innerHTML = photos.length > 1 ? photos.map((_,i) => `<button class="dot" aria-label="ดูภาพที่ ${i + 1}" data-index="${i}"></button>`).join('') : '';
   $('photo-empty').hidden = photos.length > 0;
   $('photo-empty').querySelector('p').textContent = 'ยังไม่มีรูปตำแหน่งนี้';
@@ -166,3 +171,7 @@ $('gallery').addEventListener('touchend', event => {
 document.addEventListener('visibilitychange', startTimer);
 reducedMotion.addEventListener('change', event => { if (event.matches) { paused = true; updatePause(); } });
 renderList();
+
+document.addEventListener('campus:motion-ready', () => {
+  if (dialog.open && active) { const index = photoIndex; renderGallery(P.find(p => p.id === active)); showPhoto(index); }
+});
