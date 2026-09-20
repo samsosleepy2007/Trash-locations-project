@@ -6,6 +6,8 @@ const allowedOrigins = new Set([
   'http://localhost:8766'
 ]);
 
+const directImage = (value: string) => /^https:\/\/i\.ibb\.co\/\S+$/.test(value);
+
 Deno.serve(async request => {
   const origin=request.headers.get('Origin') || '';
   const cors={
@@ -14,7 +16,11 @@ Deno.serve(async request => {
     'Access-Control-Allow-Methods':'POST, OPTIONS',
     'Vary':'Origin'
   };
-  const json=(status:number,data:unknown)=>new Response(JSON.stringify(data),{status,headers:{...cors,'Content-Type':'application/json'}});
+  const json=(status:number,data:unknown)=>new Response(JSON.stringify(data),{
+    status,
+    headers:{...cors,'Content-Type':'application/json'}
+  });
+
   if(request.method==='OPTIONS')return new Response(null,{status:204,headers:cors});
   if(request.method!=='POST')return json(405,{error:'METHOD_NOT_ALLOWED'});
 
@@ -32,40 +38,71 @@ Deno.serve(async request => {
   let form:FormData;
   try{form=await request.formData();}catch{return json(400,{error:'INVALID_FORM'});}
   const action=String(form.get('action')||'');
-  const file=form.get('file');
 
   if(action==='sign-proof'){
     if(!account.is_admin)return json(403,{error:'ADMIN_REQUIRED'});
     const path=String(form.get('path')||'');
-    if(!path||path.includes('..'))return json(400,{error:'INVALID_PHOTO_PATH'});
-    const {data,error}=await db.storage.from('activity-proofs').createSignedUrl(path,300);
-    if(error||!data?.signedUrl)return json(404,{error:'PHOTO_REQUIRED'});
-    return json(200,{signedUrl:data.signedUrl});
+    if(!directImage(path))return json(400,{error:'INVALID_PHOTO_URL'});
+    return json(200,{signedUrl:path});
   }
 
+  const file=form.get('file');
   if(!(file instanceof File))return json(400,{error:'PHOTO_REQUIRED'});
+
   const mime=file.type;
-  const ext:Record<string,string>={'image/jpeg':'jpg','image/png':'png','image/webp':'webp'};
-  if(!ext[mime])return json(400,{error:'INVALID_IMAGE_TYPE'});
-  if(file.size<=0||file.size>8*1024*1024)return json(400,{error:'IMAGE_TOO_LARGE'});
+  if(!['image/jpeg','image/png','image/webp'].includes(mime)){
+    return json(400,{error:'INVALID_IMAGE_TYPE'});
+  }
+  if(file.size<=0||file.size>8*1024*1024){
+    return json(400,{error:'IMAGE_TOO_LARGE'});
+  }
 
   if(action==='upload-proof'){
-    const {data:campaign,error:campaignError}=await db.from('activity_campaigns').select('enabled,ends_at').single();
-    if(campaignError||!campaign?.enabled||!campaign.ends_at||Date.now()>=new Date(campaign.ends_at).getTime())return json(409,{error:'CAMPAIGN_CLOSED'});
-    const id=crypto.randomUUID();
-    const path=`${account.user_id}/${id}.${ext[mime]}`;
-    const {error}=await db.storage.from('activity-proofs').upload(path,file,{contentType:mime,upsert:false});
-    if(error)return json(500,{error:'UPLOAD_FAILED'});
-    return json(200,{id,path});
-  }
+    const {data:campaign,error:campaignError}=await db
+      .from('activity_campaigns')
+      .select('enabled,ends_at')
+      .single();
 
-  if(action==='upload-prize'){
+    if(campaignError||!campaign?.enabled||!campaign.ends_at||
+       Date.now()>=new Date(campaign.ends_at).getTime()){
+      return json(409,{error:'CAMPAIGN_CLOSED'});
+    }
+  }else if(action==='upload-prize'){
     if(!account.is_admin)return json(403,{error:'ADMIN_REQUIRED'});
-    const path=`${crypto.randomUUID()}.${ext[mime]}`;
-    const {error}=await db.storage.from('activity-prizes').upload(path,file,{contentType:mime,upsert:false});
-    if(error)return json(500,{error:'UPLOAD_FAILED'});
-    return json(200,{path});
+  }else{
+    return json(400,{error:'INVALID_ACTION'});
   }
 
-  return json(400,{error:'INVALID_ACTION'});
+  const {data:imgbbKey,error:keyError}=await db.rpc('activity_imgbb_key');
+  if(keyError||typeof imgbbKey!=='string'||!imgbbKey){
+    return json(503,{error:'IMAGE_HOST_NOT_CONFIGURED'});
+  }
+
+  const upload=new FormData();
+  upload.set('image',file);
+  upload.set('name',action==='upload-prize'?'nrru-activity-prize':`nrru-proof-${crypto.randomUUID()}`);
+
+  let response:Response;
+  try{
+    response=await fetch(`https://api.imgbb.com/1/upload?key=${encodeURIComponent(imgbbKey)}`,{
+      method:'POST',
+      body:upload
+    });
+  }catch{
+    return json(502,{error:'IMAGE_HOST_UNAVAILABLE'});
+  }
+
+  let payload:any={};
+  try{payload=await response.json();}catch{}
+  const direct=String(payload?.data?.url||'');
+
+  if(!response.ok||payload?.success!==true||!directImage(direct)){
+    return json(502,{error:'IMAGE_HOST_UPLOAD_FAILED'});
+  }
+
+  if(action==='upload-proof'){
+    return json(200,{id:crypto.randomUUID(),path:direct});
+  }
+
+  return json(200,{path:direct});
 });
