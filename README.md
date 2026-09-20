@@ -32,3 +32,34 @@ python -m http.server 8765
 ## เผยแพร่
 
 workflow เดิมใน `.github/workflows/pages.yml` เผยแพร่ GitHub Pages เมื่อมีการ push ไปยัง `main`
+
+## เอฟเฟกต์ CSS / JavaScript (v1.1)
+
+ใช้ React เฉพาะส่วนตกแต่งจาก React Bits: ClickSpark, CardSwap, ShapeBlur และ SplitText โดยปรับให้ทำงานร่วมกับเว็บไซต์ static เดิม
+
+- ClickSpark: ประกาย 8 เส้นเมื่อคลิกปุ่ม (400ms), canvas วาดเฉพาะช่วงที่มีประกาย
+- CardSwap: การ์ดภาพซ้อนและสลับด้วย GSAP โดยใช้ timer เดิม 3 วินาทีและยังคงภาพเต็ม
+- ShapeBlur: shader จากตัวอย่างที่แนบมา โหลด Three.js แยกเฉพาะจอใหญ่ที่มีเมาส์ มีลาย CSS สำรองเมื่อไม่มี WebGL หยุดวาดเมื่ออยู่นอกจอ/ซ่อนแท็บ/เมาส์นิ่ง
+- SplitText: ข้อความหัวเรื่องทยอยปรากฏโดยคงภาษาไทยและ screen-reader label
+- รองรับ reduced motion; ส่วนแผนที่ ค้นหา และ gallery เดิมยังทำงานได้เมื่อ optional motion bundle โหลดไม่สำเร็จ
+
+### Build
+
+```sh
+npm ci
+npm run build
+python -m http.server 8765
+```
+
+แก้เอฟเฟกต์ที่ `src/` แล้ว build ใหม่และ commit `assets/` ไปด้วย GitHub Pages จึงยังใช้ workflow static เดิมได้ โดยไม่ต้องตั้งค่า hosting ใหม่
+
+### Browser verification
+
+```sh
+npx playwright install --with-deps chromium
+node scripts/verify.mjs
+```
+
+workflow `Verify campus map` ตรวจบน Chromium เมื่อเปิด/อัปเดต PR พร้อม screenshots ขนาด desktop และ mobile สำหรับตรวจหน้าตา
+
+ที่มาของเอฟเฟกต์: https://reactbits.dev/ และไฟล์ตัวอย่าง `promt.txt` ที่ผู้ใช้ให้มา รายละเอียดใน `THIRD_PARTY_NOTICES.md`

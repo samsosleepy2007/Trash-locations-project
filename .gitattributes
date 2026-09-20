@@ -1,0 +1,2 @@
+# Generated bundles include upstream GLSL strings with insignificant end-of-line spaces.
+assets/*.js linguist-generated=true whitespace=-blank-at-eol
