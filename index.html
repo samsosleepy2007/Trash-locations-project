@@ -53,9 +53,23 @@ const P=[
 ];
 const list=document.getElementById("list"),wrap=document.getElementById("wrap"),pop=document.getElementById("pop"),pt=document.getElementById("pt"),pd=document.getElementById("pd"),gal=document.getElementById("gal"),pc=document.getElementById("pc"),q=document.getElementById("q");let active=null,photos=[],photoIndex=0;
 const esc=s=>String(s??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;"}[m]));
-function candidates(n){return ["image/"+n+".png","image/"+n+"-1.png","image/"+n+"-2.png","image/"+n+"-3.png","image/"+n+"-4.png","image/"+n+"-5.png"];}
-function exists(src){return new Promise(r=>{const i=new Image();i.onload=()=>r(src);i.onerror=()=>r(null);i.src=src+"?v=1";});}
-async function loadPhotos(n){const c=candidates(n),single=await exists(c[0]);if(single)return [single];const multi=await Promise.all(c.slice(1).map(exists));return multi.filter(Boolean);}
+function candidates(n){
+  const names=[String(n),...Array.from({length:8},(_,i)=>n+"-"+(i+1))];
+  const exts=["jpeg","jpg","png","webp"];
+  return names.flatMap(name=>exts.map(ext=>"image/"+name+"."+ext));
+}
+function exists(src){
+  return new Promise(r=>{
+    const i=new Image();
+    i.onload=()=>r(src);
+    i.onerror=()=>r(null);
+    i.src=src+"?v=3";
+  });
+}
+async function loadPhotos(n){
+  const found=await Promise.all(candidates(n).map(exists));
+  return found.filter(Boolean);
+}
 function renderGallery(){pc.textContent=photos.length?"🖼️ "+photos.length+" รูป":"🖼️ ยังไม่มีรูป";if(!photos.length){gal.innerHTML='<div class="emptyphoto"><span>📍🗑️</span><b>ยังไม่มีรูปตำแหน่งนี้</b></div>';return}gal.innerHTML='<img src="'+esc(photos[photoIndex])+'" alt="ภาพตำแหน่ง"><div class="dots">'+photos.map((_,i)=>'<i class="dot '+(i===photoIndex?"on":"")+'"></i>').join("")+'</div>'+(photos.length>1?'<div class="nav"><button id="prev">‹</button><button id="next">›</button></div>':"");if(photos.length>1){document.getElementById("prev").onclick=e=>{e.stopPropagation();photoIndex=(photoIndex-1+photos.length)%photos.length;renderGallery()};document.getElementById("next").onclick=e=>{e.stopPropagation();photoIndex=(photoIndex+1)%photos.length;renderGallery()}}}
 function clear(){document.querySelectorAll(".pin,.card").forEach(e=>e.classList.remove("active"))}
 function renderList(){const s=q.value.trim().toLowerCase(),v=P.filter(p=>(p.name+" "+p.desc).toLowerCase().includes(s));list.innerHTML=v.length?v.map(p=>'<button class="card '+(active===p.id?"active":"")+'" data-id="'+p.id+'"><span class="num">'+p.n+'</span><span class="copy"><strong>'+esc(p.name)+'</strong><small>'+esc(p.desc)+'</small></span></button>').join(""):'<div class="empty">ไม่พบตำแหน่งที่ค้นหา</div>';document.querySelectorAll(".card").forEach(b=>b.onclick=()=>openPoint(b.dataset.id))}
