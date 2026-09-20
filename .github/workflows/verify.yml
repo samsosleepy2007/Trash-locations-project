@@ -27,5 +27,7 @@ jobs:
         if: always()
         with:
           name: campus-map-screenshots
-          path: verification/
+          path: |
+            verification/
+            assets/
           retention-days: 7
