@@ -45,7 +45,8 @@ assert.equal(admin.is_admin,true);
 assert.ok(student.session_token.length>=64);
 await denied('anon',"select * from activity_register('1234567890','another-pass')",[],/STUDENT_ID_EXISTS/);
 
-await denied('anon',"select * from activity_login('1234567890','wrong-pass')",[],/INVALID_CREDENTIALS/);
+assert.equal((await rpc("select * from activity_login('1234567890','wrong-pass')")).rows.length,0);
+assert.equal(row(await db.query("select failed_attempts from activity_private.accounts where student_id='1234567890'")).failed_attempts,1);
 const login=row(await rpc("select * from activity_login('1234567890','student-pass')"));
 assert.equal(login.user_id,student.user_id);
 assert.equal(row(await rpc('select * from activity_me($1)',[login.session_token])).student_id,'1234567890');
