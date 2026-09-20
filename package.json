@@ -4,16 +4,19 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "build": "node scripts/build.mjs"
+    "build": "node scripts/build.mjs",
+    "test:activities": "node scripts/verify-activities-db.mjs"
   },
   "dependencies": {
     "@gsap/react": "^2.1.2",
+    "@supabase/supabase-js": "2.116.0",
     "gsap": "^3.14.0",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
     "three": "^0.180.0"
   },
   "devDependencies": {
+    "@electric-sql/pglite": "0.5.8",
     "esbuild": "^0.25.0",
     "playwright": "1.51.1"
   }
