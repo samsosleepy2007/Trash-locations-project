@@ -49,7 +49,7 @@ assert.equal((await as('admin',"select * from storage.objects where bucket_id='a
 await as('student','delete from storage.objects where name=$1',[first.path]);
 assert.equal((await db.query('select * from storage.objects where name=$1',[first.path])).rows.length,1);
 await assert.rejects(()=>db.query('delete from storage.objects where name=$1',[first.path]),/foreign key/);
-await as('admin',"select activity_review($1,'approved','')",[first.id]);await as('admin',"select activity_review($1,'approved','')",[first.id]);
+await denied('admin',"select activity_review($1,'rejected','')",[second.id],/REJECTION_REASON_REQUIRED/);\nawait as('admin',"select activity_review($1,'approved','')",[first.id]);await as('admin',"select activity_review($1,'approved','')",[first.id]);
 await denied('admin',"select activity_review($1,'rejected','')",[first.id],/ALREADY_REVIEWED/);
 let board=(await as('anon','select * from activity_leaderboard($1)',[campaign])).rows;
 assert.equal(Number(board[0].points),1);assert.deepEqual(Object.keys(board[0]),['rank','display_name','faculty','major','points']);
