@@ -24,7 +24,7 @@ try{
  const student='11111111-1111-4111-8111-111111111111';
  const campaign={id:'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',title:'แยกให้ถูก ทิ้งให้เป็น',enabled:true,ends_at:new Date(Date.now()+86400000).toISOString(),prize_caption:'รอประกาศของรางวัล',prize_path:null,updated_at:'2026-09-20T00:00:00Z'};
 
- async function fixture(role,{saved=false,closed=false}={}){
+ async function fixture(role,{saved=false,closed=false,campaignDraft=false}={}){
   const context=await browser.newContext({viewport:{width:1280,height:1000}}),calls=[];
   if(role==='student'||role==='admin')await context.addInitScript(()=>localStorage.setItem('nrru-activity-student-session','test-session-token'));
   await context.route('**/activity-config.js',r=>r.fulfill({contentType:'text/javascript',body:"window.ACTIVITY_CONFIG={enabled:true,supabaseUrl:'https://activity-fixture.test',publishableKey:'test-only-public-key'}"}));
@@ -33,7 +33,7 @@ try{
    let body=null;try{body=req.postDataJSON();}catch{}
    calls.push({path,body,content});let data={};
 
-   if(path==='/rest/v1/activity_campaigns')data={...campaign,enabled:!closed,ends_at:closed?'2020-01-01T00:00:00Z':campaign.ends_at};
+   if(path==='/rest/v1/activity_campaigns')data=campaignDraft?{...campaign,enabled:false,ends_at:null}:({...campaign,enabled:!closed,ends_at:closed?'2020-01-01T00:00:00Z':campaign.ends_at});
    else if(path.endsWith('/rpc/activity_leaderboard'))data=[];
    else if(path.endsWith('/rpc/activity_login'))data=[{session_token:'login-session',user_id:student,student_id:'6940108219',is_admin:false}];
    else if(path.endsWith('/rpc/activity_register'))data=[{session_token:'register-session',user_id:student,student_id:'6940108219',is_admin:false}];
@@ -43,13 +43,13 @@ try{
    else if(path.endsWith('/rpc/activity_own_history'))data=[];
    else if(path.endsWith('/rpc/activity_save_profile'))data={user_id:student,display_name:body.p_name,faculty:body.p_faculty,major:body.p_major};
    else if(path.endsWith('/rpc/activity_submit'))data=body.p_id;
-   else if(path.endsWith('/rpc/activity_admin_queue'))data=role==='admin'?[{id:'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',status:'pending',photo_path:'fixture/photo.png',submitted_at:'2026-09-20T00:00:00Z',reviewed_at:null,rejection_note:null,display_name:'ผู้เข้าร่วมทดสอบ',faculty:'วิทยาศาสตร์',major:'คอมพิวเตอร์'}]:[];
+   else if(path.endsWith('/rpc/activity_admin_queue'))data=role==='admin'?[{id:'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',status:'pending',photo_path:'https://i.ibb.co/test-proof/proof.png',submitted_at:'2026-09-20T00:00:00Z',reviewed_at:null,rejection_note:null,display_name:'ผู้เข้าร่วมทดสอบ',faculty:'วิทยาศาสตร์',major:'คอมพิวเตอร์'}]:[];
    else if(path.endsWith('/rpc/activity_review'))data=body.p_decision;
    else if(path.endsWith('/rpc/activity_settings'))data=campaign;
    else if(path.endsWith('/functions/v1/activity-files')){
     if(content.includes('sign-proof'))data={signedUrl:'http://127.0.0.1:8766/image/nrru-logo.png'};
-    else if(content.includes('upload-prize'))data={path:'fixture-prize.png'};
-    else data={id:'cccccccc-cccc-4ccc-8ccc-cccccccccccc',path:`${student}/cccccccc-cccc-4ccc-8ccc-cccccccccccc.png`};
+    else if(content.includes('upload-prize'))data={path:'https://i.ibb.co/test-prize/prize.png'};
+    else data={id:'cccccccc-cccc-4ccc-8ccc-cccccccccccc',path:'https://i.ibb.co/test-proof/proof.png'};
    }
    await r.fulfill({status:200,contentType:'application/json',body:JSON.stringify(data)});
   });
@@ -59,6 +59,7 @@ try{
  const auth=await fixture('login');
  await auth.page.goto('http://127.0.0.1:8766/activity.html');
  await auth.page.getByRole('button',{name:'ส่งกิจกรรม',exact:true}).click();
+ assert.equal(await auth.page.getByLabel('รหัสนักศึกษา',{exact:true}).getAttribute('placeholder'),'กรอกรหัสนักศึกษา 10 หลัก');
  await auth.page.getByLabel('รหัสนักศึกษา',{exact:true}).fill('6940108219');
  await auth.page.getByLabel('รหัสผ่าน',{exact:true}).fill('secret12');
  await auth.page.getByRole('button',{name:'เข้าสู่ระบบ',exact:true}).last().click();
@@ -124,6 +125,21 @@ try{
  assert.equal(admin.calls.find(x=>x.path.endsWith('/rpc/activity_review')).body.p_decision,'approved');
  await admin.context.close();
 
+ const draft=await fixture('admin',{campaignDraft:true});
+ await draft.page.goto('http://127.0.0.1:8766/admin.html');
+ await draft.page.getByRole('heading',{name:'ตั้งค่ากิจกรรม'}).waitFor();
+ const endInput=draft.page.getByLabel('วันและเวลาสิ้นสุด (เวลาไทย)',{exact:true});
+ assert.ok((await endInput.inputValue()).length>=16);
+ const enableBox=draft.page.getByLabel('เปิดรับการส่งกิจกรรม',{exact:true});
+ await enableBox.check();
+ await draft.page.getByRole('button',{name:'บันทึกการตั้งค่า',exact:true}).click();
+ await draft.page.getByText('บันทึกการตั้งค่ากิจกรรมแล้ว',{exact:true}).waitFor();
+ const settingsCall=draft.calls.find(x=>x.path.endsWith('/rpc/activity_settings'));
+ assert.equal(settingsCall.body.p_enabled,true);
+ assert.ok(settingsCall.body.p_ends);
+ assert.ok(new Date(settingsCall.body.p_ends).getTime()>Date.now());
+ await draft.context.close();
+
  const closed=await fixture('student',{closed:true});
  await closed.page.goto('http://127.0.0.1:8766/activity.html');
  await closed.page.getByText('หมดเขตส่งกิจกรรมแล้ว',{exact:true}).waitFor();
@@ -131,5 +147,5 @@ try{
  await closed.context.close();
 
  assert.deepEqual(errors,[]);
- console.log('PASS: student ID login/register, desktop/mobile activity UI, first submission, private file service, locked profile, admin review and closed campaign.');
+ console.log('PASS: generic student login UI, ImgBB direct URLs, automatic campaign deadline, first submission, locked profile, admin review and closed campaign.');
 }finally{await browser?.close();await new Promise(r=>server.close(r));}
