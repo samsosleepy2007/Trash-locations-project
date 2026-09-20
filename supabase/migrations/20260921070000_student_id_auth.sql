@@ -191,7 +191,106 @@ begin
  end if;
  select * into campaign from public.activity_campaigns where id=p_campaign for share;
  if not found or not campaign.enabled or campaign.ends_at is null or clock_timestamp()>=campaign.ends_at then raise exception 'CAMPAIGN_CLOSED'; end if;
- if p_photo !~ ('^'||account_id::text||'/'||p_id::text||'\\.(jpg|jpeg|png|webp)$') then raise exception 'INVALID_PHOTO_PATH'; end if;
+ if p_photo !~ ('^'||account_id::text||'/'||p_id::text||'\.(jpg|jpeg|png|webp) then raise exception 'INVALID_PHOTO_PATH'; end if;
+ select id into object_id from storage.objects where bucket_id='activity-proofs' and name=p_photo for share;
+ if not found then raise exception 'PHOTO_REQUIRED'; end if;
+ insert into public.activity_submissions(id,campaign_id,user_id,photo_path,proof_object_id)
+ values(p_id,p_campaign,account_id,p_photo,object_id);
+ return p_id;
+end $$;
+
+create or replace function activity_private.admin_queue(p_session text)
+returns table(id uuid,status text,photo_path text,submitted_at timestamptz,reviewed_at timestamptz,rejection_note text,display_name text,faculty text,major text)
+language plpgsql stable security definer set search_path='' as $$
+declare account_id uuid:=activity_private.account_from_session(p_session);
+begin
+ if not activity_private.is_admin_account(account_id) then raise exception 'ADMIN_REQUIRED'; end if;
+ return query
+ (select s.id,s.status,s.photo_path,s.submitted_at,s.reviewed_at,s.rejection_note,p.display_name,p.faculty,p.major
+  from public.activity_submissions s join public.activity_profiles p on p.user_id=s.user_id
+  where s.status='pending' order by s.submitted_at asc limit 200)
+ union all
+ (select s.id,s.status,s.photo_path,s.submitted_at,s.reviewed_at,s.rejection_note,p.display_name,p.faculty,p.major
+  from public.activity_submissions s join public.activity_profiles p on p.user_id=s.user_id
+  where s.status<>'pending' order by s.reviewed_at desc limit 50);
+end $$;
+
+create or replace function activity_private.review(p_session text,p_id uuid,p_decision text,p_note text default '') returns text
+language plpgsql security definer set search_path='' as $$
+declare account_id uuid:=activity_private.account_from_session(p_session); item public.activity_submissions; normalized_note text;
+begin
+ if not activity_private.is_admin_account(account_id) then raise exception 'ADMIN_REQUIRED'; end if;
+ if p_decision not in ('approved','rejected') or p_decision is null then raise exception 'INVALID_DECISION'; end if;
+ select * into item from public.activity_submissions where id=p_id for update;
+ if not found then raise exception 'SUBMISSION_NOT_FOUND'; end if;
+ if item.status=p_decision then return item.status; end if;
+ if item.status<>'pending' then raise exception 'ALREADY_REVIEWED'; end if;
+ normalized_note:=trim(coalesce(p_note,''));
+ if p_decision='rejected' and normalized_note='' then raise exception 'REJECTION_REASON_REQUIRED'; end if;
+ update public.activity_submissions
+ set status=p_decision,reviewed_at=clock_timestamp(),reviewed_by=account_id,
+     rejection_note=case when p_decision='rejected' then normalized_note else null end
+ where id=p_id;
+ return p_decision;
+end $$;
+
+create or replace function activity_private.settings(p_session text,p_title text,p_enabled boolean,p_ends timestamptz,p_caption text,p_prize text)
+returns public.activity_campaigns language plpgsql security definer set search_path='' as $$
+declare account_id uuid:=activity_private.account_from_session(p_session); result public.activity_campaigns;
+begin
+ if not activity_private.is_admin_account(account_id) then raise exception 'ADMIN_REQUIRED'; end if;
+ if p_enabled and (p_ends is null or p_ends<=clock_timestamp()) then raise exception 'END_TIME_MUST_BE_FUTURE'; end if;
+ if p_prize is not null and not exists(select 1 from storage.objects where bucket_id='activity-prizes' and name=p_prize) then raise exception 'PRIZE_IMAGE_NOT_FOUND'; end if;
+ update public.activity_campaigns
+ set title=trim(p_title),enabled=p_enabled,ends_at=p_ends,prize_caption=trim(p_caption),prize_path=p_prize,updated_at=clock_timestamp()
+ returning * into result;
+ return result;
+end $$;
+
+-- Disable legacy Auth-based callable endpoints.
+revoke all on function public.activity_save_profile(text,text,text) from public,anon,authenticated,service_role;
+revoke all on function public.activity_submit(uuid,uuid,text) from public,anon,authenticated,service_role;
+revoke all on function public.activity_review(uuid,text,text) from public,anon,authenticated,service_role;
+revoke all on function public.activity_settings(text,boolean,timestamptz,text,text) from public,anon,authenticated,service_role;
+revoke all on function public.activity_is_admin() from public,anon,authenticated,service_role;
+revoke all on function public.activity_notifications() from public,anon,authenticated,service_role;
+
+create or replace function public.activity_register(p_student_id text,p_password text)
+returns table(session_token text,user_id uuid,student_id text,is_admin boolean)
+language sql security invoker set search_path='' as $$select * from activity_private.register(p_student_id,p_password)$$;
+create or replace function public.activity_login(p_student_id text,p_password text)
+returns table(session_token text,user_id uuid,student_id text,is_admin boolean)
+language sql security invoker set search_path='' as $$select * from activity_private.login(p_student_id,p_password)$$;
+create or replace function public.activity_logout(p_session text) returns void
+language sql security invoker set search_path='' as $$select activity_private.logout(p_session)$$;
+create or replace function public.activity_me(p_session text)
+returns table(user_id uuid,student_id text,is_admin boolean)
+language sql stable security invoker set search_path='' as $$select * from activity_private.me(p_session)$$;
+create or replace function public.activity_own_profile(p_session text) returns setof public.activity_profiles
+language sql stable security invoker set search_path='' as $$select * from activity_private.own_profile(p_session)$$;
+create or replace function public.activity_own_history(p_session text)
+returns table(id uuid,status text,submitted_at timestamptz,rejection_note text,photo_path text)
+language sql stable security invoker set search_path='' as $$select * from activity_private.own_history(p_session)$$;
+create or replace function public.activity_save_profile(p_session text,p_name text,p_faculty text,p_major text)
+returns public.activity_profiles language sql security invoker set search_path='' as $$select activity_private.save_profile(p_session,p_name,p_faculty,p_major)$$;
+create or replace function public.activity_submit(p_session text,p_id uuid,p_campaign uuid,p_photo text) returns uuid
+language sql security invoker set search_path='' as $$select activity_private.submit(p_session,p_id,p_campaign,p_photo)$$;
+create or replace function public.activity_admin_queue(p_session text)
+returns table(id uuid,status text,photo_path text,submitted_at timestamptz,reviewed_at timestamptz,rejection_note text,display_name text,faculty text,major text)
+language sql stable security invoker set search_path='' as $$select * from activity_private.admin_queue(p_session)$$;
+create or replace function public.activity_review(p_session text,p_id uuid,p_decision text,p_note text default '') returns text
+language sql security invoker set search_path='' as $$select activity_private.review(p_session,p_id,p_decision,p_note)$$;
+create or replace function public.activity_settings(p_session text,p_title text,p_enabled boolean,p_ends timestamptz,p_caption text,p_prize text)
+returns public.activity_campaigns language sql security invoker set search_path='' as $$select activity_private.settings(p_session,p_title,p_enabled,p_ends,p_caption,p_prize)$$;
+
+revoke all on function activity_private.student_id_ok(text),activity_private.password_ok(text),activity_private.account_from_session(text),activity_private.is_admin_account(uuid),activity_private.issue_session(uuid),activity_private.register(text,text),activity_private.login(text,text),activity_private.logout(text),activity_private.me(text),activity_private.own_profile(text),activity_private.own_history(text),activity_private.save_profile(text,text,text,text),activity_private.submit(text,uuid,uuid,text),activity_private.admin_queue(text),activity_private.review(text,uuid,text,text),activity_private.settings(text,text,boolean,timestamptz,text,text) from public,anon,authenticated;
+grant execute on function activity_private.register(text,text),activity_private.login(text,text),activity_private.logout(text),activity_private.me(text),activity_private.own_profile(text),activity_private.own_history(text),activity_private.save_profile(text,text,text,text),activity_private.submit(text,uuid,uuid,text),activity_private.admin_queue(text),activity_private.review(text,uuid,text,text),activity_private.settings(text,text,boolean,timestamptz,text,text) to anon,authenticated,service_role;
+
+revoke all on function public.activity_register(text,text),public.activity_login(text,text),public.activity_logout(text),public.activity_me(text),public.activity_own_profile(text),public.activity_own_history(text),public.activity_save_profile(text,text,text,text),public.activity_submit(text,uuid,uuid,text),public.activity_admin_queue(text),public.activity_review(text,uuid,text,text),public.activity_settings(text,text,boolean,timestamptz,text,text) from public,anon,authenticated;
+grant execute on function public.activity_register(text,text),public.activity_login(text,text),public.activity_logout(text),public.activity_me(text),public.activity_own_profile(text),public.activity_own_history(text),public.activity_save_profile(text,text,text,text),public.activity_submit(text,uuid,uuid,text),public.activity_admin_queue(text),public.activity_review(text,uuid,text,text),public.activity_settings(text,text,boolean,timestamptz,text,text) to anon,authenticated,service_role;
+
+commit;
+) then raise exception 'INVALID_PHOTO_PATH'; end if;
  select id into object_id from storage.objects where bucket_id='activity-proofs' and name=p_photo for share;
  if not found then raise exception 'PHOTO_REQUIRED'; end if;
  insert into public.activity_submissions(id,campaign_id,user_id,photo_path,proof_object_id)
