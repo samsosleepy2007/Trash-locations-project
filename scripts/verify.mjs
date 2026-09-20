@@ -65,8 +65,12 @@ try {
   assert.ok(await page.locator('#detail').evaluate(e=>{const r=e.getBoundingClientRect();return r.left>=0&&r.right<=innerWidth;}));
   await page.screenshot({path:'verification/mobile-gallery.png'});
   // Swipe and keyboard navigation use the existing gallery state/timer.
-  await page.locator('#gallery').dispatchEvent('touchstart',{touches:[{clientX:250}]});
-  await page.locator('#gallery').dispatchEvent('touchend',{changedTouches:[{clientX:100}]});
+  await page.locator('#gallery').evaluate(element => {
+    const start = new Touch({identifier:1,target:element,clientX:250,clientY:100});
+    const end = new Touch({identifier:1,target:element,clientX:100,clientY:100});
+    element.dispatchEvent(new TouchEvent('touchstart',{bubbles:true,touches:[start],changedTouches:[start]}));
+    element.dispatchEvent(new TouchEvent('touchend',{bubbles:true,touches:[],changedTouches:[end]}));
+  });
   assert.equal(await page.locator('#photo-count').textContent(),'ภาพ 2 / 2');
   await page.keyboard.press('Escape');
   await page.emulateMedia({reducedMotion:'reduce'});
