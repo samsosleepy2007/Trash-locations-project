@@ -1,0 +1,5 @@
+project_id = "nrru-recycling-activities"
+
+[functions.activity-mailer]
+# The function verifies the user with Auth + DB admin allowlist, or a private scheduler token.
+verify_jwt = false

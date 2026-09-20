@@ -1,3 +1,7 @@
 node_modules/
 
 verification/
+
+supabase/.temp/
+.env
+.env.*
