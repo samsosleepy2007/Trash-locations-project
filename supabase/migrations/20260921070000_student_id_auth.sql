@@ -428,16 +428,16 @@ revoke all on function public.activity_admin_queue(text) from public,anon,authen
 revoke all on function public.activity_review(text,uuid,text,text) from public,anon,authenticated;
 revoke all on function public.activity_settings(text,text,boolean,timestamptz,text,text) from public,anon,authenticated;
 
-grant execute on function public.activity_register(text,text) to anon,authenticated;
-grant execute on function public.activity_login(text,text) to anon,authenticated;
-grant execute on function public.activity_logout(text) to anon,authenticated;
-grant execute on function public.activity_me(text) to anon,authenticated;
-grant execute on function public.activity_own_profile(text) to anon,authenticated;
-grant execute on function public.activity_own_history(text) to anon,authenticated;
-grant execute on function public.activity_save_profile(text,text,text,text) to anon,authenticated;
-grant execute on function public.activity_submit(text,uuid,uuid,text) to anon,authenticated;
-grant execute on function public.activity_admin_queue(text) to anon,authenticated;
-grant execute on function public.activity_review(text,uuid,text,text) to anon,authenticated;
-grant execute on function public.activity_settings(text,text,boolean,timestamptz,text,text) to anon,authenticated;
+grant execute on function public.activity_register(text,text) to anon,authenticated,service_role;
+grant execute on function public.activity_login(text,text) to anon,authenticated,service_role;
+grant execute on function public.activity_logout(text) to anon,authenticated,service_role;
+grant execute on function public.activity_me(text) to anon,authenticated,service_role;
+grant execute on function public.activity_own_profile(text) to anon,authenticated,service_role;
+grant execute on function public.activity_own_history(text) to anon,authenticated,service_role;
+grant execute on function public.activity_save_profile(text,text,text,text) to anon,authenticated,service_role;
+grant execute on function public.activity_submit(text,uuid,uuid,text) to anon,authenticated,service_role;
+grant execute on function public.activity_admin_queue(text) to anon,authenticated,service_role;
+grant execute on function public.activity_review(text,uuid,text,text) to anon,authenticated,service_role;
+grant execute on function public.activity_settings(text,text,boolean,timestamptz,text,text) to anon,authenticated,service_role;
 
 commit;
