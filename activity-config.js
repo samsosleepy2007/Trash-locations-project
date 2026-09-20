@@ -1,7 +1,6 @@
-// Public client configuration only. Never put service_role, SMTP or Resend secrets here.
-// Set enabled=true only after backend, university email delivery and admin access pass verification.
+// Public project coordinates only. Activate after SMTP, redirect URLs and mail delivery are verified.
 window.ACTIVITY_CONFIG = Object.freeze({
   enabled: false,
-  supabaseUrl: '',
-  publishableKey: ''
+  supabaseUrl: 'https://ejhlgroeoyvsyhntagvs.supabase.co',
+  publishableKey: 'sb_publishable__WmivcmJQvAlW5V_TYvWlw_AeYesUow'
 });

@@ -47,3 +47,9 @@ No administrator is seeded, and users cannot grant themselves this role. Admin a
 `node scripts/verify-activities-browser.mjs` runs Chromium UI flows with **mocked Auth/Storage/API responses** and writes screenshots. It sends no real emails. GitHub Actions also reruns the existing map/gallery checks. These are not a substitute for the live Supabase/SMTP/Resend activation checks above.
 
 References: [Supabase email OTP](https://supabase.com/docs/guides/auth/auth-email-passwordless), [custom SMTP](https://supabase.com/docs/guides/auth/auth-smtp), [private Storage](https://supabase.com/docs/guides/storage/serving/downloads), [Resend idempotency](https://resend.com/docs/dashboard/emails/idempotency-keys).
+
+## Provisioned deployment
+
+Project: `ejhlgroeoyvsyhntagvs` — NRRU Green Campus Activities, Singapore. Both migrations have been applied and `activity-mailer` version 1 deployed. The designated administrator mailbox is stored only in `activity_private.admin_emails`; it is not an auto-confirmed Auth account. A matching, genuinely confirmed university mailbox receives admin rights. Clients have no access to modify this allowlist.
+
+Pending activation: dashboard login, custom SMTP/verified email sender, exact Auth redirect URLs, mailer secrets and schedule, then a real consenting mailbox acceptance test. The frontend flag remains off until these are ready. To designate a further administrator, a database owner may insert the lowercased email into `activity_private.admin_emails`. Never add unconfirmed Auth identities or disable email confirmation to work around missing SMTP.

@@ -15,9 +15,11 @@ create function storage.foldername(text) returns text[] language sql immutable a
 `);
 const migration=(await readdir('supabase/migrations')).find(f=>f.endsWith('_recycling_activities.sql'));
 await db.exec(await readFile(`supabase/migrations/${migration}`,'utf8'));
+await db.exec(await readFile('supabase/migrations/20260920214102_activity_admin_email_allowlist.sql','utf8'));
 const ids={student:'11111111-1111-4111-8111-111111111111',other:'22222222-2222-4222-8222-222222222222',admin:'33333333-3333-4333-8333-333333333333',external:'44444444-4444-4444-8444-444444444444',unverified:'55555555-5555-4555-8555-555555555555'};
 for(const [name,id] of Object.entries(ids))await db.query('insert into auth.users values($1,$2,$3)',[id,`${name}@${name==='external'?'example.com':'nrru.ac.th'}`,name==='unverified'?null:new Date().toISOString()]);
-await db.query('insert into activity_private.admins values($1)',[ids.admin]);
+await db.query('insert into activity_private.admin_emails(email) values($1)',['admin@nrru.ac.th']);
+assert.equal((await db.query("select count(*)::int as n from activity_private.admins")).rows[0].n,0);
 const campaign=(await db.query('select id from activity_campaigns')).rows[0].id;
 async function as(who,sql,params=[]){await db.exec('reset role');await db.query("select set_config('request.jwt.claim.sub',$1,false)",[ids[who]||'']);await db.exec(`set role ${who==='anon'?'anon':who==='service'?'service_role':'authenticated'}`);try{return await db.query(sql,params);}finally{await db.exec('reset role');}}
 async function denied(who,sql,params=[],pattern){await assert.rejects(()=>as(who,sql,params),pattern);}
@@ -26,6 +28,9 @@ await denied('anon',profile,[],/permission denied/);
 await denied('external',profile,[],/UNIVERSITY_EMAIL_REQUIRED/);
 await denied('unverified',profile,[],/UNIVERSITY_EMAIL_REQUIRED/);
 await as('student',profile);await as('student',profile);
+await db.query('insert into activity_private.admin_emails(email) values($1)', ['unverified@nrru.ac.th']);
+assert.equal((await as('unverified','select activity_is_admin() as yes')).rows[0].yes,false);
+await denied('student',"insert into activity_private.admin_emails(email) values('student@nrru.ac.th')",[],/permission denied/);
 await denied('student',"select activity_save_profile('ชื่อใหม่','วิทยาศาสตร์','คอมพิวเตอร์')",[],/PROFILE_LOCKED/);
 await denied('student',"update activity_profiles set display_name='แก้ชื่อ'",[],/permission denied/);
 await assert.rejects(()=>db.exec("update activity_profiles set major='changed'"),/PROFILE_LOCKED/);
