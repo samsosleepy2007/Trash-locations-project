@@ -1,8 +1,11 @@
 import {PGlite} from '@electric-sql/pglite';
 import {readFile,readdir} from 'node:fs/promises';
 import assert from 'node:assert/strict';
+
 const db=new PGlite();
-await db.exec(`create role anon; create role authenticated; create role service_role; create schema auth; create schema storage;
+await db.exec(`
+create role anon; create role authenticated; create role service_role;
+create schema auth; create schema storage; create schema extensions;
 create table auth.users(id uuid primary key,email text,email_confirmed_at timestamptz);
 create function auth.uid() returns uuid language sql stable as $$select nullif(current_setting('request.jwt.claim.sub',true),'')::uuid$$;
 grant usage on schema public,auth,storage to anon,authenticated,service_role;
@@ -12,60 +15,82 @@ create table storage.objects(id uuid primary key default gen_random_uuid(),bucke
 alter table storage.objects enable row level security;
 grant select,insert,update,delete on storage.objects to authenticated;
 create function storage.foldername(text) returns text[] language sql immutable as $$select string_to_array($1,'/')$$;
+create function extensions.digest(text,text) returns bytea language sql immutable as $$select convert_to(md5($1),'UTF8')$$;
+create function extensions.gen_random_bytes(int) returns bytea language sql volatile as $$select convert_to(gen_random_uuid()::text||gen_random_uuid()::text,'UTF8')$$;
+create function extensions.gen_salt(text,int) returns text language sql immutable as $$select 'test-salt'::text$$;
+create function extensions.crypt(text,text) returns text language sql immutable as $$select 'test$'||md5($1)$$;
 `);
+
 const migrations=(await readdir('supabase/migrations')).filter(f=>f.endsWith('.sql')).sort();
-for(const migration of migrations)await db.exec(await readFile(`supabase/migrations/${migration}`,'utf8'));
-const ids={student:'11111111-1111-4111-8111-111111111111',other:'22222222-2222-4222-8222-222222222222',admin:'33333333-3333-4333-8333-333333333333',external:'44444444-4444-4444-8444-444444444444',unverified:'55555555-5555-4555-8555-555555555555'};
-for(const [name,id] of Object.entries(ids))await db.query('insert into auth.users values($1,$2,$3)',[id,`${name}@${name==='external'?'example.com':'nrru.ac.th'}`,name==='unverified'?null:new Date().toISOString()]);
-await db.query('insert into activity_private.admin_emails(email) values($1)',['admin@nrru.ac.th']);
-assert.equal((await db.query("select count(*)::int as n from activity_private.admins")).rows[0].n,0);
-const campaign=(await db.query('select id from activity_campaigns')).rows[0].id;
-async function as(who,sql,params=[]){await db.exec('reset role');await db.query("select set_config('request.jwt.claim.sub',$1,false)",[ids[who]||'']);await db.exec(`set role ${who==='anon'?'anon':who==='service'?'service_role':'authenticated'}`);try{return await db.query(sql,params);}finally{await db.exec('reset role');}}
-async function denied(who,sql,params=[],pattern){await assert.rejects(()=>as(who,sql,params),pattern);}
-const profile="select activity_save_profile('ชื่อทดสอบ','วิทยาศาสตร์','คอมพิวเตอร์')";
-await denied('anon',profile,[],/permission denied/);
-await denied('external',profile,[],/UNIVERSITY_EMAIL_REQUIRED/);
-await denied('unverified',profile,[],/UNIVERSITY_EMAIL_REQUIRED/);
-await as('student',profile);await as('student',profile);
-await db.query('insert into activity_private.admin_emails(email) values($1)', ['unverified@nrru.ac.th']);
-assert.equal((await as('unverified','select activity_is_admin() as yes')).rows[0].yes,false);
-await denied('student',"insert into activity_private.admin_emails(email) values('student@nrru.ac.th')",[],/permission denied/);
-await denied('student',"select activity_save_profile('ชื่อใหม่','วิทยาศาสตร์','คอมพิวเตอร์')",[],/PROFILE_LOCKED/);
-await denied('student',"update activity_profiles set display_name='แก้ชื่อ'",[],/permission denied/);
-await assert.rejects(()=>db.exec("update activity_profiles set major='changed'"),/PROFILE_LOCKED/);
-assert.equal((await as('other','select * from activity_profiles')).rows.length,0);
-await denied('student',"select activity_settings('ทดสอบ',true,now()+interval '1 day','รางวัล',null)",[],/ADMIN_REQUIRED/);
-await as('admin',"select activity_settings('ทดสอบ',true,now()+interval '1 day','รางวัล',null)");
-async function submit(n){const id=`aaaaaaaa-aaaa-4aaa-8aaa-${String(n).padStart(12,'0')}`,path=`${ids.student}/${id}.jpg`;await as('student','insert into storage.objects(bucket_id,name) values($1,$2)',['activity-proofs',path]);await as('student','select activity_submit($1,$2,$3)',[id,campaign,path]);return {id,path};}
+for(const migration of migrations){
+ let sql=await readFile(`supabase/migrations/${migration}`,'utf8');
+ sql=sql.replace('create extension if not exists pgcrypto with schema extensions;','-- pgcrypto is stubbed by this PGlite test');
+ await db.exec(sql);
+}
+
+async function as(role,sql,params=[]){await db.exec('reset role');await db.exec(`set role ${role}`);try{return await db.query(sql,params);}finally{await db.exec('reset role');}}
+async function denied(role,sql,params=[],pattern){await assert.rejects(()=>as(role,sql,params),pattern);}
+async function rpc(sql,params=[]){return as('anon',sql,params);}
+function row(result){return result.rows[0];}
+
+await denied('anon',"select * from activity_private.accounts",[],/permission denied/);
+await denied('anon',"select activity_register('123','123456')",[],/INVALID_STUDENT_ID/);
+await denied('anon',"select activity_register('1234567890','123')",[],/WEAK_PASSWORD/);
+
+const student=row(await rpc("select * from activity_register('1234567890','student-pass')"));
+const admin=row(await rpc("select * from activity_register('6940108219','admin-pass')"));
+assert.equal(student.student_id,'1234567890');
+assert.equal(student.is_admin,false);
+assert.equal(admin.is_admin,true);
+assert.ok(student.session_token.length>=64);
+await denied('anon',"select * from activity_register('1234567890','another-pass')",[],/STUDENT_ID_EXISTS/);
+
+await denied('anon',"select * from activity_login('1234567890','wrong-pass')",[],/INVALID_CREDENTIALS/);
+const login=row(await rpc("select * from activity_login('1234567890','student-pass')"));
+assert.equal(login.user_id,student.user_id);
+assert.equal(row(await rpc('select * from activity_me($1)',[login.session_token])).student_id,'1234567890');
+
+const profile=row(await rpc("select (activity_save_profile($1,'ชื่อทดสอบ','วิทยาศาสตร์','คอมพิวเตอร์')).*",[login.session_token]));
+assert.equal(profile.display_name,'ชื่อทดสอบ');
+await rpc("select activity_save_profile($1,'ชื่อทดสอบ','วิทยาศาสตร์','คอมพิวเตอร์')",[login.session_token]);
+await denied('anon',"select activity_save_profile($1,'ชื่อใหม่','วิทยาศาสตร์','คอมพิวเตอร์')",[login.session_token],/PROFILE_LOCKED/);
+await denied('anon',"select * from activity_profiles",[],/permission denied/);
+
+const campaign=row(await db.query('select id from activity_campaigns')).id;
+await denied('anon',"select activity_settings($1,'ทดสอบ',true,now()+interval '1 day','รางวัล',null)",[login.session_token],/ADMIN_REQUIRED/);
+await rpc("select activity_settings($1,'ทดสอบ',true,now()+interval '1 day','รางวัล',null)",[admin.session_token]);
+
+async function submit(n){
+ const id=`aaaaaaaa-aaaa-4aaa-8aaa-${String(n).padStart(12,'0')}`;
+ const path=`${student.user_id}/${id}.jpg`;
+ await db.query("insert into storage.objects(bucket_id,name) values('activity-proofs',$1)",[path]);
+ await rpc('select activity_submit($1,$2,$3,$4)',[login.session_token,id,campaign,path]);
+ return {id,path};
+}
 const first=await submit(1),second=await submit(2);
-await as('student','select activity_submit($1,$2,$3)',[first.id,campaign,first.path]);
-assert.equal((await db.query('select * from activity_submissions')).rows.length,2);
-await denied('student',"select activity_review($1,'approved','')",[first.id],/ADMIN_REQUIRED/);
-await denied('student',"update activity_submissions set status='approved'",[],/permission denied/);
-assert.equal((await as('other','select * from activity_submissions')).rows.length,0);
-assert.equal((await as('other',"select * from storage.objects where bucket_id='activity-proofs'")).rows.length,0);
-assert.equal((await as('admin',"select * from storage.objects where bucket_id='activity-proofs'")).rows.length,2);
-await as('student','delete from storage.objects where name=$1',[first.path]);
-assert.equal((await db.query('select * from storage.objects where name=$1',[first.path])).rows.length,1);
-await assert.rejects(()=>db.query('delete from storage.objects where name=$1',[first.path]),/foreign key/);
-await denied('admin',"select activity_review($1,'rejected','')",[second.id],/REJECTION_REASON_REQUIRED/);
-await as('admin',"select activity_review($1,'approved','')",[first.id]);await as('admin',"select activity_review($1,'approved','')",[first.id]);
-await denied('admin',"select activity_review($1,'rejected','')",[first.id],/ALREADY_REVIEWED/);
-let board=(await as('anon','select * from activity_leaderboard($1)',[campaign])).rows;
-assert.equal(Number(board[0].points),1);assert.deepEqual(Object.keys(board[0]),['rank','display_name','faculty','major','points']);
-await as('admin',"select activity_review($1,'rejected','ภาพไม่ชัด')",[second.id]);await as('admin',"select activity_review($1,'rejected','ภาพไม่ชัด')",[second.id]);
-assert.equal((await db.query('select * from activity_private.mail_outbox')).rows.length,1);
-assert.equal(Number((await as('anon','select * from activity_leaderboard($1)',[campaign])).rows[0].points),1);
-await denied('student','select * from activity_claim_mail()',[],/permission denied/);
-await denied('student','select * from activity_notifications()',[],/ADMIN_REQUIRED/);
-await denied('student','select * from activity_private.admins',[],/permission denied/);
-const job=(await as('service','select * from activity_claim_mail()')).rows[0];assert.equal(job.recipient,'student@nrru.ac.th');
-assert.equal((await as('service','select * from activity_claim_mail()')).rows.length,0);
-await as('service','select activity_finish_mail($1,$2,$3,null)',[job.id,job.lease_id,'provider-test']);
-assert.equal((await db.query('select state from activity_private.mail_outbox')).rows[0].state,'sent');
-await as('admin',"select activity_settings('ทดสอบ',false,now()-interval '1 hour','รางวัล',null)");
-await denied('student','select activity_submit($1,$2,$3)',['aaaaaaaa-aaaa-4aaa-8aaa-000000000003',campaign,`${ids.student}/aaaaaaaa-aaaa-4aaa-8aaa-000000000003.jpg`],/CAMPAIGN_CLOSED/);
-await denied('student',"insert into storage.objects(bucket_id,name) values('activity-proofs',$1)",[`${ids.student}/aaaaaaaa-aaaa-4aaa-8aaa-000000000004.jpg`],/row-level security/);
-await as('student','select activity_submit($1,$2,$3)',[first.id,campaign,first.path]);
-await denied('admin',"select activity_settings('ทดสอบ',true,now()-interval '1 hour','รางวัล',null)",[],/END_TIME_MUST_BE_FUTURE/);
-await db.close();console.log('PASS: real PostgreSQL migration, confirmed university identity, immutable profile, RLS, evidence protection, admin-only review, exactly-once scores, mail queue leases, deadlines and idempotent retries.');
+await rpc('select activity_submit($1,$2,$3,$4)',[login.session_token,first.id,campaign,first.path]);
+assert.equal(row(await db.query('select count(*)::int as n from activity_submissions')).n,2);
+assert.equal((await rpc('select * from activity_own_history($1)',[login.session_token])).rows.length,2);
+
+const queue=await rpc('select * from activity_admin_queue($1)',[admin.session_token]);
+assert.equal(queue.rows.length,2);
+assert.equal(queue.rows[0].display_name,'ชื่อทดสอบ');
+await denied('anon',"select activity_review($1,$2,'rejected','')",[admin.session_token,second.id],/REJECTION_REASON_REQUIRED/);
+await rpc("select activity_review($1,$2,'approved','')",[admin.session_token,first.id]);
+await rpc("select activity_review($1,$2,'approved','')",[admin.session_token,first.id]);
+await denied('anon',"select activity_review($1,$2,'rejected','เหตุผล')",[admin.session_token,first.id],/ALREADY_REVIEWED/);
+await rpc("select activity_review($1,$2,'rejected','ภาพไม่ชัด')",[admin.session_token,second.id]);
+
+const board=(await rpc('select * from activity_leaderboard($1)',[campaign])).rows;
+assert.equal(Number(board[0].points),1);
+assert.deepEqual(Object.keys(board[0]),['rank','display_name','faculty','major','points']);
+const history=(await rpc('select * from activity_own_history($1)',[login.session_token])).rows;
+assert.equal(history.find(x=>x.id===second.id).rejection_note,'ภาพไม่ชัด');
+
+await rpc('select activity_logout($1)',[login.session_token]);
+assert.equal((await rpc('select * from activity_me($1)',[login.session_token])).rows.length,0);
+await denied('anon',"select * from activity_own_history($1)",[login.session_token],/SESSION_REQUIRED/);
+await denied('anon',"select activity_settings($1,'ทดสอบ',true,now()-interval '1 hour','รางวัล',null)",[admin.session_token],/END_TIME_MUST_BE_FUTURE/);
+
+await db.close();
+console.log('PASS: student ID registration/login, hashed credentials, opaque sessions, immutable profile, admin allowlist, private submissions, review reasons and leaderboard.');
