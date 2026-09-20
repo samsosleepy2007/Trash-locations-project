@@ -42,6 +42,7 @@ const admin=row(await rpc("select * from activity_register('6940108219','admin-p
 assert.equal(student.student_id,'1234567890');
 assert.equal(student.is_admin,false);
 assert.equal(admin.is_admin,true);
+assert.equal(row(await as('service_role','select * from activity_me($1)',[admin.session_token])).student_id,'6940108219');
 assert.ok(student.session_token.length>=64);
 await denied('anon',"select * from activity_register('1234567890','another-pass')",[],/STUDENT_ID_EXISTS/);
 
