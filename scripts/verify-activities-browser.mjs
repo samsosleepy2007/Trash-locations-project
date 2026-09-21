@@ -26,10 +26,12 @@ try{
 
  async function fixture(role,{saved=false,closed=false,campaignDraft=false}={}){
   const context=await browser.newContext({viewport:{width:1280,height:1000}}),calls=[];
+  let debugLogs=role==='admin'?[{id:1,student_id:'1234567890',action:'activity-files',stage:'imgbb-upload',level:'error',code:'IMAGE_HOST_UPLOAD_FAILED',http_status:400,detail:'Invalid API key',created_at:'2026-09-20T00:00:00Z'}]:[];
   if(role==='student'||role==='admin')await context.addInitScript(()=>localStorage.setItem('nrru-activity-student-session','test-session-token'));
   await context.route('**/activity-config.js',r=>r.fulfill({contentType:'text/javascript',body:"window.ACTIVITY_CONFIG={enabled:true,supabaseUrl:'https://activity-fixture.test',publishableKey:'test-only-public-key'}"}));
   await context.route('https://api.github.com/repos/samsosleepy2007/Trash-locations-project/git/trees/main?recursive=1',r=>r.fulfill({status:200,contentType:'application/json',body:JSON.stringify({tree:[{type:'blob',path:'image/nrru-logo.png'},{type:'blob',path:'image/map.jpeg'},{type:'blob',path:'README.md'}]})}));
   await context.route('https://raw.githubusercontent.com/samsosleepy2007/Trash-locations-project/main/image/**',async r=>r.fulfill({status:200,contentType:'image/png',body:await readFile('image/nrru-logo.png')}));
+  await context.route('https://cdn.example.test/**',async r=>r.fulfill({status:200,contentType:'image/png',body:await readFile('image/nrru-logo.png')}));
   await context.route('https://activity-fixture.test/**',async r=>{
    const req=r.request(),url=new URL(req.url()),path=url.pathname,content=req.postData()||'';
    let body=null;try{body=req.postDataJSON();}catch{}
@@ -46,12 +48,12 @@ try{
    else if(path.endsWith('/rpc/activity_save_profile'))data={user_id:student,display_name:body.p_name,faculty:body.p_faculty,major:body.p_major};
    else if(path.endsWith('/rpc/activity_submit'))data=body.p_id;
    else if(path.endsWith('/rpc/activity_admin_queue'))data=role==='admin'?[{id:'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',status:'pending',photo_path:'https://i.ibb.co/test-proof/proof.png',submitted_at:'2026-09-20T00:00:00Z',reviewed_at:null,rejection_note:null,display_name:'ผู้เข้าร่วมทดสอบ',faculty:'วิทยาศาสตร์',major:'คอมพิวเตอร์'}]:[];
-   else if(path.endsWith('/rpc/activity_admin_logs'))data=role==='admin'?[{id:1,student_id:'1234567890',action:'activity-files',stage:'imgbb-upload',level:'error',code:'IMAGE_HOST_UPLOAD_FAILED',http_status:400,detail:'Invalid API key',created_at:'2026-09-20T00:00:00Z'}]:[];
-   else if(path.endsWith('/rpc/activity_clear_debug_logs'))data=1;
+   else if(path.endsWith('/rpc/activity_admin_logs'))data=debugLogs;
    else if(path.endsWith('/rpc/activity_review'))data=body.p_decision;
-   else if(path.endsWith('/rpc/activity_settings'))data=campaign;
    else if(path.endsWith('/functions/v1/activity-files')){
-    if(content.includes('sign-proof'))data={signedUrl:'http://127.0.0.1:8766/image/nrru-logo.png'};
+    if(content.includes('clear-logs')){const n=debugLogs.length;debugLogs=[];data={cleared:n};}
+    else if(content.includes('save-settings')){const source=content.includes('direct')?'direct':content.includes('github')?'github':'upload';debugLogs=[{id:2,student_id:'6940108219',action:'activity-files',stage:'settings-save',level:'info',code:'OK',http_status:200,detail:`source=${source}`,created_at:'2026-09-21T00:00:00Z'},...debugLogs];data={campaign,source};}
+    else if(content.includes('sign-proof'))data={signedUrl:'http://127.0.0.1:8766/image/nrru-logo.png'};
     else if(content.includes('upload-prize'))data={path:'https://i.ibb.co/test-prize/prize.png'};
     else data={id:'cccccccc-cccc-4ccc-8ccc-cccccccccccc',path:'https://i.ibb.co/test-proof/proof.png'};
    }
@@ -116,10 +118,14 @@ try{
  const admin=await fixture('admin');
  await admin.page.goto('http://127.0.0.1:8766/admin.html');
  await admin.page.getByRole('button',{name:'ตรวจรูป'}).waitFor();
- await admin.page.getByRole('heading',{name:'Activity / ImgBB Log'}).waitFor();
+ await admin.page.getByRole('heading',{name:'Activity Debug Log'}).waitFor();
  await admin.page.getByText('IMAGE_HOST_UPLOAD_FAILED · HTTP 400',{exact:true}).waitFor();
  await admin.page.getByText('Invalid API key',{exact:true}).waitFor();
  await admin.page.screenshot({animations:'disabled',path:'verification/activity-admin.png',fullPage:true});
+ await admin.page.getByRole('button',{name:'ล้าง Log',exact:true}).click();
+ await admin.page.getByText('ล้าง Debug Log แล้ว 1 รายการ',{exact:true}).waitFor();
+ await admin.page.getByText('ยังไม่มี Debug Log · ลองอัปโหลดอีกครั้งแล้วกดรีเฟรช Log',{exact:true}).waitFor();
+ assert.equal(admin.calls.filter(x=>x.path.endsWith('/functions/v1/activity-files')&&x.content.includes('clear-logs')).length,1);
  await admin.page.getByRole('button',{name:'ตรวจรูป'}).click();
  await admin.page.locator('.a-proof').waitFor();
  const rejectButton=admin.page.getByRole('button',{name:'ผิด · ไม่ให้คะแนน',exact:true});
@@ -144,12 +150,24 @@ try{
  await enableBox.check();
  await draft.page.getByRole('button',{name:'บันทึกการตั้งค่า',exact:true}).click();
  await draft.page.getByText('บันทึกการตั้งค่าแล้ว · ใช้รูปจาก GitHub',{exact:true}).waitFor();
- const settingsCall=draft.calls.find(x=>x.path.endsWith('/rpc/activity_settings'));
- assert.equal(settingsCall.body.p_enabled,true);
- assert.ok(settingsCall.body.p_ends);
- assert.equal(settingsCall.body.p_prize,'https://raw.githubusercontent.com/samsosleepy2007/Trash-locations-project/main/image/nrru-logo.png');
- assert.ok(new Date(settingsCall.body.p_ends).getTime()>Date.now());
+ const settingsCall=draft.calls.find(x=>x.path.endsWith('/functions/v1/activity-files')&&x.content.includes('save-settings'));
+ assert.ok(settingsCall);
+ assert.ok(settingsCall.content.includes('github'));
+ assert.ok(settingsCall.content.includes('https://raw.githubusercontent.com/samsosleepy2007/Trash-locations-project/main/image/nrru-logo.png'));
+ await draft.page.getByText('settings-save',{exact:true}).waitFor();
  await draft.context.close();
+
+ const direct=await fixture('admin',{campaignDraft:true});
+ await direct.page.goto('http://127.0.0.1:8766/admin.html');
+ await direct.page.getByRole('button',{name:'Direct Image URL',exact:true}).click();
+ await direct.page.getByLabel('Direct Image URL',{exact:true}).fill('https://cdn.example.test/reward?id=7');
+ await direct.page.getByAltText('ตัวอย่างรูปจาก Direct Image URL').waitFor();
+ await direct.page.getByRole('button',{name:'บันทึกการตั้งค่า',exact:true}).click();
+ await direct.page.getByText('บันทึกการตั้งค่าแล้ว · ใช้ Direct Image URL',{exact:true}).waitFor();
+ const directCall=direct.calls.find(x=>x.path.endsWith('/functions/v1/activity-files')&&x.content.includes('save-settings'));
+ assert.ok(directCall?.content.includes('direct'));
+ assert.ok(directCall?.content.includes('https://cdn.example.test/reward?id=7'));
+ await direct.context.close();
 
  const closed=await fixture('student',{closed:true});
  await closed.page.goto('http://127.0.0.1:8766/activity.html');
@@ -158,5 +176,5 @@ try{
  await closed.context.close();
 
  assert.deepEqual(errors,[]);
- console.log('PASS: generic student login UI, GitHub prize picker, ImgBB fallback, automatic campaign deadline, first submission, locked profile, admin review and closed campaign.');
+ console.log('PASS: admin edge actions, clear logs, GitHub + direct prize URLs, ImgBB fallback, automatic campaign deadline, first submission, locked profile, admin review and closed campaign.');
 }finally{await browser?.close();await new Promise(r=>server.close(r));}
