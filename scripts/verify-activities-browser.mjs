@@ -28,6 +28,8 @@ try{
   const context=await browser.newContext({viewport:{width:1280,height:1000}}),calls=[];
   if(role==='student'||role==='admin')await context.addInitScript(()=>localStorage.setItem('nrru-activity-student-session','test-session-token'));
   await context.route('**/activity-config.js',r=>r.fulfill({contentType:'text/javascript',body:"window.ACTIVITY_CONFIG={enabled:true,supabaseUrl:'https://activity-fixture.test',publishableKey:'test-only-public-key'}"}));
+  await context.route('https://api.github.com/repos/samsosleepy2007/Trash-locations-project/git/trees/main?recursive=1',r=>r.fulfill({status:200,contentType:'application/json',body:JSON.stringify({tree:[{type:'blob',path:'image/nrru-logo.png'},{type:'blob',path:'image/map.jpeg'},{type:'blob',path:'README.md'}]})}));
+  await context.route('https://raw.githubusercontent.com/samsosleepy2007/Trash-locations-project/main/image/**',async r=>r.fulfill({status:200,contentType:'image/png',body:await readFile('image/nrru-logo.png')}));
   await context.route('https://activity-fixture.test/**',async r=>{
    const req=r.request(),url=new URL(req.url()),path=url.pathname,content=req.postData()||'';
    let body=null;try{body=req.postDataJSON();}catch{}
@@ -135,13 +137,17 @@ try{
  await draft.page.getByRole('heading',{name:'ตั้งค่ากิจกรรม'}).waitFor();
  const endInput=draft.page.getByLabel('วันและเวลาสิ้นสุด (เวลาไทย)',{exact:true});
  assert.ok((await endInput.inputValue()).length>=16);
+ await draft.page.getByRole('button',{name:'เลือกจาก GitHub',exact:true}).click();
+ await draft.page.getByRole('button',{name:/nrru-logo\.png/}).click();
+ assert.match(await draft.page.getByLabel('GitHub Raw URL',{exact:true}).inputValue(),/raw\.githubusercontent\.com\/samsosleepy2007\/Trash-locations-project\/main\/image\/nrru-logo\.png$/);
  const enableBox=draft.page.getByLabel('เปิดรับการส่งกิจกรรม',{exact:true});
  await enableBox.check();
  await draft.page.getByRole('button',{name:'บันทึกการตั้งค่า',exact:true}).click();
- await draft.page.getByText('บันทึกการตั้งค่ากิจกรรมแล้ว',{exact:true}).waitFor();
+ await draft.page.getByText('บันทึกการตั้งค่าแล้ว · ใช้รูปจาก GitHub',{exact:true}).waitFor();
  const settingsCall=draft.calls.find(x=>x.path.endsWith('/rpc/activity_settings'));
  assert.equal(settingsCall.body.p_enabled,true);
  assert.ok(settingsCall.body.p_ends);
+ assert.equal(settingsCall.body.p_prize,'https://raw.githubusercontent.com/samsosleepy2007/Trash-locations-project/main/image/nrru-logo.png');
  assert.ok(new Date(settingsCall.body.p_ends).getTime()>Date.now());
  await draft.context.close();
 
@@ -152,5 +158,5 @@ try{
  await closed.context.close();
 
  assert.deepEqual(errors,[]);
- console.log('PASS: generic student login UI, ImgBB direct URLs, automatic campaign deadline, first submission, locked profile, admin review and closed campaign.');
+ console.log('PASS: generic student login UI, GitHub prize picker, ImgBB fallback, automatic campaign deadline, first submission, locked profile, admin review and closed campaign.');
 }finally{await browser?.close();await new Promise(r=>server.close(r));}
