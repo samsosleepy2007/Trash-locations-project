@@ -121,10 +121,12 @@ Deno.serve(async request => {
     });
 
     if(error){
-      const code=clean(error.message).match(/[A-Z][A-Z0-9_]{3,}/)?.[0]||'SETTINGS_SAVE_FAILED';
+      const message=clean(error.message);
+      const known=message.match(/\b(?:ADMIN_REQUIRED|END_TIME_MUST_BE_FUTURE|INVALID_PRIZE_URL|PRIZE_IMAGE_NOT_FOUND|CAMPAIGN_NOT_FOUND)\b/)?.[0];
+      const code=known||(String(error.code)==='21000'?'SAFEUPDATE_BLOCKED':'SETTINGS_SAVE_FAILED');
       await log('settings-save','error',code,500,
-        `db_code=${clean(error.code)}; message=${clean(error.message)}; source=${source}; prize_host=${prize?prizeHost(prize):'none'}`);
-      return json(500,{error:code,detail:clean(error.message),dbCode:clean(error.code)});
+        `db_code=${clean(error.code)}; message=${message}; source=${source}; prize_host=${prize?prizeHost(prize):'none'}`);
+      return json(500,{error:code,detail:message,dbCode:clean(error.code)});
     }
 
     await log('settings-save','info','OK',200,
