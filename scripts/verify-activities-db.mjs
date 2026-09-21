@@ -60,6 +60,13 @@ await denied('anon',"select * from activity_profiles",[],/permission denied/);
 await db.query("insert into activity_private.integration_secrets(name,secret_value) values('imgbb_api_key','test-secret')");
 await denied('anon',"select activity_imgbb_key()",[],/permission denied/);
 assert.equal(row(await as('service_role',"select activity_imgbb_key() as secret")).secret,'test-secret');
+await as('service_role',"select activity_debug_write($1,'activity-files','imgbb-upload','error','IMAGE_HOST_UPLOAD_FAILED',400,'Invalid API key')",[student.user_id]);
+await denied('anon',"select * from activity_admin_logs($1,100)",[login.session_token],/ADMIN_REQUIRED/);
+const debugRows=(await rpc('select * from activity_admin_logs($1,100)',[admin.session_token])).rows;
+assert.equal(debugRows.length,1);
+assert.equal(debugRows[0].code,'IMAGE_HOST_UPLOAD_FAILED');
+assert.equal(debugRows[0].student_id,'1234567890');
+assert.equal(row(await rpc('select activity_clear_debug_logs($1) as n',[admin.session_token])).n,1);
 
 const campaign=row(await db.query('select id from activity_campaigns')).id;
 await denied('anon',"select activity_settings($1,'ทดสอบ',true,now()+interval '1 day','รางวัล',null)",[login.session_token],/ADMIN_REQUIRED/);
