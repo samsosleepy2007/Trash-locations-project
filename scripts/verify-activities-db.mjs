@@ -75,6 +75,10 @@ const started=row(await db.query("select enabled,ends_at from activity_campaigns
 assert.equal(started.enabled,true);
 assert.ok(new Date(started.ends_at).getTime()>Date.now()+6*24*3600*1000);
 await denied('anon',"select activity_settings($1,'ทดสอบ',true,now()+interval '1 day','รางวัล','https://example.com/prize.jpg')",[admin.session_token],/INVALID_PRIZE_URL/);
+await db.query("insert into storage.objects(bucket_id,name) values('activity-prizes','fallback/prize.png')");
+const fallbackPrize='https://ejhlgroeoyvsyhntagvs.supabase.co/storage/v1/object/public/activity-prizes/fallback/prize.png';
+await rpc("select activity_settings($1,'ทดสอบ',true,now()+interval '1 day','รางวัล',$2)",[admin.session_token,fallbackPrize]);
+assert.equal(row(await db.query('select prize_path from activity_campaigns where id=$1',[campaign])).prize_path,fallbackPrize);
 
 async function submit(n){
  const id=`aaaaaaaa-aaaa-4aaa-8aaa-${String(n).padStart(12,'0')}`;
@@ -84,12 +88,24 @@ async function submit(n){
 }
 const first=await submit(1),second=await submit(2);
 await rpc('select activity_submit($1,$2,$3,$4)',[login.session_token,first.id,campaign,first.path]);
-assert.equal(row(await db.query('select count(*)::int as n from activity_submissions')).n,2);
+const fallbackId='aaaaaaaa-aaaa-4aaa-8aaa-000000000003';
+const fallbackObject=`${student.user_id}/${fallbackId}.jpg`;
+await db.query("insert into storage.objects(bucket_id,name) values('activity-proofs',$1)",[fallbackObject]);
+const fallbackPath=`storage://activity-proofs/${fallbackObject}`;
+await rpc('select activity_submit($1,$2,$3,$4)',[login.session_token,fallbackId,campaign,fallbackPath]);
+await denied('anon','select activity_submit($1,$2,$3,$4)',[
+ login.session_token,
+ 'aaaaaaaa-aaaa-4aaa-8aaa-000000000004',
+ campaign,
+ 'storage://activity-proofs/11111111-1111-4111-8111-111111111111/not-owned.jpg'
+],/INVALID_PHOTO_URL|PHOTO_REQUIRED/);
+assert.equal(row(await db.query('select count(*)::int as n from activity_submissions')).n,3);
 assert.equal(row(await db.query('select count(*)::int as n from activity_submissions where proof_object_id is null')).n,2);
-assert.equal((await rpc('select * from activity_own_history($1)',[login.session_token])).rows.length,2);
+assert.equal(row(await db.query('select count(*)::int as n from activity_submissions where proof_object_id is not null')).n,1);
+assert.equal((await rpc('select * from activity_own_history($1)',[login.session_token])).rows.length,3);
 
 const queue=await rpc('select * from activity_admin_queue($1)',[admin.session_token]);
-assert.equal(queue.rows.length,2);
+assert.equal(queue.rows.length,3);
 assert.equal(queue.rows[0].display_name,'ชื่อทดสอบ');
 await denied('anon',"select activity_review($1,$2,'rejected','')",[admin.session_token,second.id],/REJECTION_REASON_REQUIRED/);
 await rpc("select activity_review($1,$2,'approved','')",[admin.session_token,first.id]);
@@ -109,4 +125,4 @@ await denied('anon',"select * from activity_own_history($1)",[login.session_toke
 await denied('anon',"select activity_settings($1,'ทดสอบ',true,now()-interval '1 hour','รางวัล',null)",[admin.session_token],/END_TIME_MUST_BE_FUTURE/);
 
 await db.close();
-console.log('PASS: student ID auth, private secrets, ImgBB direct URLs, automatic campaign deadline, immutable profiles, admin review and leaderboard.');
+console.log('PASS: student ID auth, ImgBB + Supabase fallback images, private logs, automatic campaign deadline, immutable profiles, admin review and leaderboard.');
