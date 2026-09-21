@@ -39,7 +39,13 @@ export function readableError(error){
   IMGBB_MAINTENANCE:'ImgBB ปิดปรับปรุงชั่วคราว ระบบจะลองใช้พื้นที่สำรอง',
   FALLBACK_UPLOAD_FAILED:'ImgBB ใช้งานไม่ได้และพื้นที่สำรองก็อัปโหลดไม่สำเร็จ',
   FALLBACK_READ_FAILED:'โหลดรูปจากพื้นที่สำรองไม่สำเร็จ',
-  GITHUB_IMAGE_LIST_FAILED:'โหลดรายการรูปจาก GitHub ไม่สำเร็จ กรุณาลองใหม่หรือวาง Raw URL เอง'
+  GITHUB_IMAGE_LIST_FAILED:'โหลดรายการรูปจาก GitHub ไม่สำเร็จ กรุณาลองใหม่หรือวาง Raw URL เอง',
+  INVALID_PRIZE_SOURCE:'ประเภทแหล่งรูปของรางวัลไม่ถูกต้อง',
+  INVALID_GITHUB_PRIZE_URL:'ลิงก์ GitHub ของรูปของรางวัลไม่ถูกต้อง',
+  INVALID_DIRECT_IMAGE_URL:'Direct Image URL ต้องเป็นลิงก์ HTTPS ที่เปิดรูปได้โดยตรง',
+  INVALID_UPLOADED_PRIZE_URL:'ลิงก์รูปที่อัปโหลดไม่ใช่ URL จากระบบอัปโหลด',
+  SETTINGS_SAVE_FAILED:'บันทึกการตั้งค่ากิจกรรมไม่สำเร็จ',
+  CLEAR_LOGS_FAILED:'ล้าง Debug Log ไม่สำเร็จ'
  };
  for(const [code,message] of Object.entries(messages))if(text.includes(code))return message;
  if(/fetch|network/i.test(text))return 'เชื่อมต่อไม่สำเร็จ กรุณาตรวจอินเทอร์เน็ตแล้วลองใหม่';
@@ -79,11 +85,11 @@ export async function saveProfile(fields){return checked(client.rpc('activity_sa
 export async function submitActivity(id,campaign,path){return checked(client.rpc('activity_submit',{p_session:sessionToken(),p_id:id,p_campaign:campaign,p_photo:path}));}
 export async function adminQueue(){return checked(client.rpc('activity_admin_queue',{p_session:sessionToken()}));}
 export async function adminLogs(limit=100){return checked(client.rpc('activity_admin_logs',{p_session:sessionToken(),p_limit:limit}));}
-export async function clearAdminLogs(){return checked(client.rpc('activity_clear_debug_logs',{p_session:sessionToken()}));}
 export async function reviewActivity(id,decision,note){return checked(client.rpc('activity_review',{p_session:sessionToken(),p_id:id,p_decision:decision,p_note:note}));}
-export async function saveSettings({title,enabled,ends,caption,prize}){return checked(client.rpc('activity_settings',{p_session:sessionToken(),p_title:title,p_enabled:enabled,p_ends:ends,p_caption:caption,p_prize:prize}));}
 export const githubPrizeURL=value=>/^https:\/\/raw\.githubusercontent\.com\/samsosleepy2007\/Trash-locations-project\/main\/[^\s]+\.(png|jpg|jpeg|webp)$/i.test(value||'');
-export function prizeURL(path){const value=path||'';return /^https:\/\/i\.ibb\.co\//.test(value)||/^https:\/\/ejhlgroeoyvsyhntagvs\.supabase\.co\/storage\/v1\/object\/public\/activity-prizes\//.test(value)||githubPrizeURL(value)?value:null;}
+export const managedPrizeURL=value=>/^https:\/\/i\.ibb\.co\//.test(value||'')||/^https:\/\/ejhlgroeoyvsyhntagvs\.supabase\.co\/storage\/v1\/object\/public\/activity-prizes\//.test(value||'');
+export const directPrizeURL=value=>typeof value==='string'&&value.length<=2048&&/^https:\/\/\S+$/i.test(value);
+export function prizeURL(path){const value=path||'';return directPrizeURL(value)?value:null;}
 export async function githubPrizeImages(){
  const response=await fetch('https://api.github.com/repos/samsosleepy2007/Trash-locations-project/git/trees/main?recursive=1',{headers:{Accept:'application/vnd.github+json'}});
  if(!response.ok)throw Error('GITHUB_IMAGE_LIST_FAILED');
@@ -100,8 +106,9 @@ export async function validateImage(file){
  if(bitmap.width>16000||bitmap.height>16000){bitmap.close();throw Error('รูปมีขนาดกว้างหรือสูงเกิน 16,000 พิกเซล');}
  bitmap.close();return file;
 }
-async function fileAction(action,{file,path}={}){
+async function fileAction(action,{file,path,fields}={}){
  const form=new FormData();form.set('action',action);if(file)form.set('file',file);if(path)form.set('path',path);
+ for(const [key,value] of Object.entries(fields||{}))form.set(key,value==null?'':String(value));
  const response=await fetch(`${config.supabaseUrl}/functions/v1/activity-files`,{method:'POST',headers:{apikey:config.publishableKey,'x-activity-session':sessionToken()},body:form});
  let data={};try{data=await response.json();}catch{}
  if(!response.ok){const code=data.error||`FILE_HTTP_${response.status}`;const detail=data.detail?` · ${data.detail}`:'';throw Error(`${code}${detail}`);}
@@ -110,3 +117,12 @@ async function fileAction(action,{file,path}={}){
 export const uploadProof=file=>fileAction('upload-proof',{file});
 export const signProof=path=>fileAction('sign-proof',{path});
 export const uploadPrize=file=>fileAction('upload-prize',{file});
+
+export const clearAdminLogs=()=>fileAction('clear-logs');
+export const saveSettings=({title,enabled,ends,caption,prize,source='upload'})=>fileAction('save-settings',{fields:{title,enabled,ends:ends||'',caption,prize:prize||'',source}});
+export function readableAdminError(error){
+ const raw=String(error?.message||error||'').replace(/[\r\n\t]+/g,' ').slice(0,320);
+ const base=readableError(error);
+ if(!raw||base===raw)return base;
+ return `${base} · ${raw}`;
+}
