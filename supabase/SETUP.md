@@ -17,6 +17,8 @@ The activity site remains a static GitHub Pages site. Account authentication is 
 
 - The first saved display name, faculty and major are immutable.
 - Evidence and prize images are uploaded by the `activity-files` Edge Function to ImgBB. The browser never receives the ImgBB API key.
+- ImgBB is retried up to three times for transient 429/5xx/maintenance responses. If it remains unavailable, proofs fall back to private `activity-proofs` Storage and prize images fall back to the public `activity-prizes` bucket.
+- Proof fallback values are stored as `storage://activity-proofs/...` references and are converted to short-lived signed URLs only for admins. Prize fallback values use the project's public Storage URL.
 - PostgreSQL stores ImgBB `data.url` direct image URLs (`https://i.ibb.co/...`) for evidence/prize images.
 - The ImgBB API key is stored only in `activity_private.integration_secrets`; never commit it to GitHub or `activity-config.js`.
 - Evidence accepts JPEG, PNG or WebP up to 8 MiB.

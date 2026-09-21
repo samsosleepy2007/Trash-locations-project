@@ -7,7 +7,10 @@ const allowedOrigins = new Set([
 ]);
 
 const directImage = (value: string) => /^https:\/\/i\.ibb\.co\/\S+$/.test(value);
+const storageProof = (value: string) => value.startsWith('storage://activity-proofs/');
 const clean = (value: unknown, max=800) => String(value ?? '').replace(/[\r\n\t]+/g,' ').slice(0,max);
+const sleep = (ms:number) => new Promise(resolve=>setTimeout(resolve,ms));
+const extensionFor = (mime:string) => mime==='image/png'?'png':mime==='image/webp'?'webp':'jpg';
 
 Deno.serve(async request => {
   const origin=request.headers.get('Origin') || '';
@@ -64,12 +67,22 @@ Deno.serve(async request => {
       return json(403,{error:'ADMIN_REQUIRED'});
     }
     const path=String(form.get('path')||'');
-    if(!directImage(path)){
-      await log('sign-proof-url','error','INVALID_PHOTO_URL',400,clean(path,180));
-      return json(400,{error:'INVALID_PHOTO_URL'});
+    if(directImage(path)){
+      await log('sign-proof-success','info','OK',200,'provider=imgbb');
+      return json(200,{signedUrl:path,provider:'imgbb'});
     }
-    await log('sign-proof-success','info','OK',200);
-    return json(200,{signedUrl:path});
+    if(storageProof(path)){
+      const name=path.slice('storage://activity-proofs/'.length);
+      const {data,error}=await db.storage.from('activity-proofs').createSignedUrl(name,300);
+      if(error||!data?.signedUrl){
+        await log('sign-proof-storage','error','FALLBACK_READ_FAILED',500,clean(error?.message));
+        return json(500,{error:'FALLBACK_READ_FAILED'});
+      }
+      await log('sign-proof-success','info','OK',200,'provider=supabase-fallback');
+      return json(200,{signedUrl:data.signedUrl,provider:'supabase-fallback'});
+    }
+    await log('sign-proof-url','error','INVALID_PHOTO_URL',400,clean(path,180));
+    return json(400,{error:'INVALID_PHOTO_URL'});
   }
 
   const file=form.get('file');
@@ -112,55 +125,94 @@ Deno.serve(async request => {
     return json(400,{error:'INVALID_ACTION'});
   }
 
+  const uploadId=crypto.randomUUID();
   const {data:imgbbKey,error:keyError}=await db.rpc('activity_imgbb_key');
-  if(keyError||typeof imgbbKey!=='string'||!imgbbKey){
-    await log('imgbb-key','error','IMAGE_HOST_NOT_CONFIGURED',503,`rpc_error=${clean(keyError?.message)}`);
-    return json(503,{error:'IMAGE_HOST_NOT_CONFIGURED'});
+  let lastImgBB='';
+
+  if(!keyError&&typeof imgbbKey==='string'&&imgbbKey){
+    for(let attempt=1;attempt<=3;attempt++){
+      try{
+        const upload=new FormData();
+        upload.set('image',file);
+        upload.set('name',action==='upload-prize'?'nrru-activity-prize':`nrru-proof-${uploadId}`);
+        const response=await fetch(`https://api.imgbb.com/1/upload?key=${encodeURIComponent(imgbbKey)}`,{
+          method:'POST',
+          body:upload
+        });
+        const raw=await response.text();
+        const contentType=response.headers.get('content-type')||'';
+        const maintenance=response.status===503||/down for maintenance|<!doctype html|<html/i.test(raw);
+        let payload:any={};
+
+        if(/json/i.test(contentType)||(!maintenance&&raw.trim().startsWith('{'))){
+          try{payload=raw?JSON.parse(raw):{};}
+          catch(error){
+            lastImgBB=`parse=${clean(error)}; body=${clean(raw,350)}`;
+          }
+        }else{
+          lastImgBB=`content-type=${clean(contentType)}; body=${clean(raw,350)}`;
+        }
+
+        const direct=String(payload?.data?.url||'');
+        if(response.ok&&payload?.success===true&&directImage(direct)){
+          await log('imgbb-upload','info','OK',response.status,`attempt=${attempt}; provider=imgbb; bytes=${file.size}`);
+          if(action==='upload-proof')return json(200,{id:uploadId,path:direct,provider:'imgbb'});
+          return json(200,{path:direct,provider:'imgbb'});
+        }
+
+        const code=maintenance?'IMGBB_MAINTENANCE':'IMAGE_HOST_UPLOAD_FAILED';
+        const detail=maintenance
+          ? `attempt=${attempt}; ImgBB maintenance; HTTP ${response.status}`
+          : `attempt=${attempt}; status=${response.status}; error=${clean(payload?.error?.message||payload?.status_txt||lastImgBB)}`;
+        lastImgBB=detail;
+        await log('imgbb-attempt','warn',code,response.status,detail);
+
+        const retryable=maintenance||[429,500,502,503,504].includes(response.status);
+        if(attempt<3&&retryable)await sleep(attempt===1?250:700);
+        else break;
+      }catch(error){
+        lastImgBB=`attempt=${attempt}; fetch=${clean(error)}`;
+        await log('imgbb-attempt','warn','IMAGE_HOST_UNAVAILABLE',502,lastImgBB);
+        if(attempt<3)await sleep(attempt===1?250:700);
+      }
+    }
+  }else{
+    lastImgBB=`key_error=${clean(keyError?.message)}`;
+    await log('imgbb-key','warn','IMAGE_HOST_NOT_CONFIGURED',503,lastImgBB);
   }
 
-  const upload=new FormData();
-  upload.set('image',file);
-  upload.set('name',action==='upload-prize'?'nrru-activity-prize':`nrru-proof-${crypto.randomUUID()}`);
+  const ext=extensionFor(mime);
+  const bucket=action==='upload-proof'?'activity-proofs':'activity-prizes';
+  const objectName=action==='upload-proof'
+    ? `${account.user_id}/${uploadId}.${ext}`
+    : `fallback/${uploadId}.${ext}`;
 
-  let response:Response;
-  try{
-    response=await fetch(`https://api.imgbb.com/1/upload?key=${encodeURIComponent(imgbbKey)}`,{
-      method:'POST',
-      body:upload
-    });
-  }catch(error){
-    await log('imgbb-fetch','error','IMAGE_HOST_UNAVAILABLE',502,clean(error));
-    return json(502,{error:'IMAGE_HOST_UNAVAILABLE'});
-  }
+  const {error:storageError}=await db.storage.from(bucket).upload(objectName,file,{
+    contentType:mime,
+    cacheControl:'31536000',
+    upsert:false
+  });
 
-  let payload:any={};
-  let raw='';
-  try{
-    raw=await response.text();
-    payload=raw?JSON.parse(raw):{};
-  }catch(error){
-    await log('imgbb-response-parse','error','IMAGE_HOST_BAD_RESPONSE',response.status,
-      `parse=${clean(error)}; body=${clean(raw,500)}`);
-    return json(502,{error:'IMAGE_HOST_UPLOAD_FAILED',detail:'ImgBB returned an unreadable response'});
-  }
-
-  const direct=String(payload?.data?.url||'');
-  const imgbbError=clean(payload?.error?.message||payload?.error||payload?.status_txt||'');
-
-  if(!response.ok||payload?.success!==true||!directImage(direct)){
-    await log('imgbb-upload','error','IMAGE_HOST_UPLOAD_FAILED',response.status,
-      `success=${String(payload?.success)}; status=${payload?.status||''}; status_txt=${clean(payload?.status_txt)}; error=${imgbbError}`);
+  if(storageError){
+    await log('storage-fallback','error','FALLBACK_UPLOAD_FAILED',502,
+      `bucket=${bucket}; error=${clean(storageError.message)}; imgbb=${clean(lastImgBB,400)}`);
     return json(502,{
-      error:'IMAGE_HOST_UPLOAD_FAILED',
-      detail:imgbbError||`ImgBB HTTP ${response.status}`,
-      upstreamStatus:response.status
+      error:'FALLBACK_UPLOAD_FAILED',
+      detail:'ImgBB ใช้งานไม่ได้และระบบสำรองอัปโหลดไม่สำเร็จ'
     });
   }
 
-  await log('imgbb-upload','info','OK',response.status,`host=i.ibb.co; bytes=${file.size}`);
+  await log('storage-fallback','info','OK',200,
+    `provider=supabase-fallback; bucket=${bucket}; imgbb=${clean(lastImgBB,400)}`);
 
   if(action==='upload-proof'){
-    return json(200,{id:crypto.randomUUID(),path:direct});
+    return json(200,{
+      id:uploadId,
+      path:`storage://activity-proofs/${objectName}`,
+      provider:'supabase-fallback'
+    });
   }
-  return json(200,{path:direct});
+
+  const publicUrl=db.storage.from('activity-prizes').getPublicUrl(objectName).data.publicUrl;
+  return json(200,{path:publicUrl,provider:'supabase-fallback'});
 });
