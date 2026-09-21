@@ -74,7 +74,7 @@ await rpc("select activity_settings($1,'ทดสอบ',true,null,'รางว
 const started=row(await db.query("select enabled,ends_at from activity_campaigns where id=$1",[campaign]));
 assert.equal(started.enabled,true);
 assert.ok(new Date(started.ends_at).getTime()>Date.now()+6*24*3600*1000);
-await denied('anon',"select activity_settings($1,'ทดสอบ',true,now()+interval '1 day','รางวัล','https://example.com/prize.jpg')",[admin.session_token],/INVALID_PRIZE_URL/);
+await denied('anon',"select activity_settings($1,'ทดสอบ',true,now()+interval '1 day','รางวัล','http://example.com/prize.jpg')",[admin.session_token],/INVALID_PRIZE_URL/);
 await db.query("insert into storage.objects(bucket_id,name) values('activity-prizes','fallback/prize.png')");
 const fallbackPrize='https://ejhlgroeoyvsyhntagvs.supabase.co/storage/v1/object/public/activity-prizes/fallback/prize.png';
 await rpc("select activity_settings($1,'ทดสอบ',true,now()+interval '1 day','รางวัล',$2)",[admin.session_token,fallbackPrize]);
