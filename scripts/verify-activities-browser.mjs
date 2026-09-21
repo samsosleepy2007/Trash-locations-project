@@ -143,7 +143,7 @@ try{
  const enableBox=draft.page.getByLabel('เปิดรับการส่งกิจกรรม',{exact:true});
  await enableBox.check();
  await draft.page.getByRole('button',{name:'บันทึกการตั้งค่า',exact:true}).click();
- await draft.page.getByText('บันทึกการตั้งค่ากิจกรรมแล้ว',{exact:true}).waitFor();
+ await draft.page.getByText('บันทึกการตั้งค่าแล้ว · ใช้รูปจาก GitHub',{exact:true}).waitFor();
  const settingsCall=draft.calls.find(x=>x.path.endsWith('/rpc/activity_settings'));
  assert.equal(settingsCall.body.p_enabled,true);
  assert.ok(settingsCall.body.p_ends);
