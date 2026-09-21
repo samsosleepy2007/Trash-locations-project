@@ -34,7 +34,8 @@ export function readableError(error){
   INVALID_PRIZE_URL:'ลิงก์รูปของรางวัลไม่ถูกต้อง',
   IMAGE_HOST_NOT_CONFIGURED:'ระบบฝากรูปยังไม่ได้ตั้งค่า กรุณาติดต่อผู้ดูแล',
   IMAGE_HOST_UNAVAILABLE:'เชื่อมต่อบริการฝากรูปไม่ได้ กรุณาลองใหม่',
-  IMAGE_HOST_UPLOAD_FAILED:'ImgBB อัปโหลดรูปไม่สำเร็จ กรุณาลองใหม่'
+  IMAGE_HOST_UPLOAD_FAILED:'ImgBB อัปโหลดรูปไม่สำเร็จ กรุณาลองใหม่',
+  IMAGE_HOST_BAD_RESPONSE:'ImgBB ตอบกลับมาในรูปแบบที่อ่านไม่ได้'
  };
  for(const [code,message] of Object.entries(messages))if(text.includes(code))return message;
  if(/fetch|network/i.test(text))return 'เชื่อมต่อไม่สำเร็จ กรุณาตรวจอินเทอร์เน็ตแล้วลองใหม่';
@@ -73,6 +74,8 @@ export async function ownHistory(){return checked(client.rpc('activity_own_histo
 export async function saveProfile(fields){return checked(client.rpc('activity_save_profile',{p_session:sessionToken(),p_name:fields.display_name,p_faculty:fields.faculty,p_major:fields.major}));}
 export async function submitActivity(id,campaign,path){return checked(client.rpc('activity_submit',{p_session:sessionToken(),p_id:id,p_campaign:campaign,p_photo:path}));}
 export async function adminQueue(){return checked(client.rpc('activity_admin_queue',{p_session:sessionToken()}));}
+export async function adminLogs(limit=100){return checked(client.rpc('activity_admin_logs',{p_session:sessionToken(),p_limit:limit}));}
+export async function clearAdminLogs(){return checked(client.rpc('activity_clear_debug_logs',{p_session:sessionToken()}));}
 export async function reviewActivity(id,decision,note){return checked(client.rpc('activity_review',{p_session:sessionToken(),p_id:id,p_decision:decision,p_note:note}));}
 export async function saveSettings({title,enabled,ends,caption,prize}){return checked(client.rpc('activity_settings',{p_session:sessionToken(),p_title:title,p_enabled:enabled,p_ends:ends,p_caption:caption,p_prize:prize}));}
 export function prizeURL(path){return /^https:\/\/i\.ibb\.co\//.test(path||'')?path:null;}
@@ -87,7 +90,7 @@ async function fileAction(action,{file,path}={}){
  const form=new FormData();form.set('action',action);if(file)form.set('file',file);if(path)form.set('path',path);
  const response=await fetch(`${config.supabaseUrl}/functions/v1/activity-files`,{method:'POST',headers:{apikey:config.publishableKey,'x-activity-session':sessionToken()},body:form});
  let data={};try{data=await response.json();}catch{}
- if(!response.ok)throw Error(data.error||`FILE_HTTP_${response.status}`);
+ if(!response.ok){const code=data.error||`FILE_HTTP_${response.status}`;const detail=data.detail?` · ${data.detail}`:'';throw Error(`${code}${detail}`);}
  return data;
 }
 export const uploadProof=file=>fileAction('upload-proof',{file});
