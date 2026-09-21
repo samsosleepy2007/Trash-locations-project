@@ -82,7 +82,11 @@ assert.equal(row(await db.query('select prize_path from activity_campaigns where
 const githubPrize='https://raw.githubusercontent.com/samsosleepy2007/Trash-locations-project/main/image/nrru-logo.png';
 await rpc("select activity_settings($1,'ทดสอบ',true,now()+interval '1 day','รางวัล',$2)",[admin.session_token,githubPrize]);
 assert.equal(row(await db.query('select prize_path from activity_campaigns where id=$1',[campaign])).prize_path,githubPrize);
-await denied('anon',"select activity_settings($1,'ทดสอบ',true,now()+interval '1 day','รางวัล','https://raw.githubusercontent.com/other/repo/main/image/x.png')",[admin.session_token],/INVALID_PRIZE_URL/);
+const directPrize='https://cdn.example.test/rewards/green-campus?id=7';
+await rpc("select activity_settings($1,'ทดสอบ',true,now()+interval '1 day','รางวัล',$2)",[admin.session_token,directPrize]);
+assert.equal(row(await db.query('select prize_path from activity_campaigns where id=$1',[campaign])).prize_path,directPrize);
+assert.equal(row(await db.query("select to_regprocedure('public.activity_settings(text,boolean,timestamptz,text,text)') is null as gone")).gone,true);
+assert.equal(row(await db.query("select to_regprocedure('activity_private.settings(text,boolean,timestamptz,text,text)') is null as gone")).gone,true);
 
 async function submit(n){
  const id=`aaaaaaaa-aaaa-4aaa-8aaa-${String(n).padStart(12,'0')}`;
@@ -129,4 +133,4 @@ await denied('anon',"select * from activity_own_history($1)",[login.session_toke
 await denied('anon',"select activity_settings($1,'ทดสอบ',true,now()-interval '1 hour','รางวัล',null)",[admin.session_token],/END_TIME_MUST_BE_FUTURE/);
 
 await db.close();
-console.log('PASS: student ID auth, ImgBB + Supabase fallback + GitHub prize images, private logs, automatic campaign deadline, immutable profiles, admin review and leaderboard.');
+console.log('PASS: student ID auth, uploaded + GitHub + direct prize images, legacy settings overload cleanup, private logs, automatic campaign deadline, immutable profiles, admin review and leaderboard.');
