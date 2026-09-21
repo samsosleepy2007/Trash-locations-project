@@ -7,6 +7,10 @@ const allowedOrigins = new Set([
 ]);
 
 const directImage = (value: string) => /^https:\/\/i\.ibb\.co\/\S+$/.test(value);
+const githubPrize = (value: string) => /^https:\/\/raw\.githubusercontent\.com\/samsosleepy2007\/Trash-locations-project\/main\/\S+\.(png|jpg|jpeg|webp)$/i.test(value);
+const supabasePrize = (value: string) => /^https:\/\/ejhlgroeoyvsyhntagvs\.supabase\.co\/storage\/v1\/object\/public\/activity-prizes\/\S+$/i.test(value);
+const httpsPrize = (value: string) => value.length<=2048 && /^https:\/\/\S+$/i.test(value);
+const prizeHost = (value: string) => { try { return new URL(value).host; } catch { return 'invalid'; } };
 const storageProof = (value: string) => value.startsWith('storage://activity-proofs/');
 const clean = (value: unknown, max=800) => String(value ?? '').replace(/[\r\n\t]+/g,' ').slice(0,max);
 const sleep = (ms:number) => new Promise(resolve=>setTimeout(resolve,ms));
@@ -60,6 +64,73 @@ Deno.serve(async request => {
     return json(400,{error:'INVALID_FORM'});
   }
   const action=String(form.get('action')||'');
+
+  if(action==='clear-logs'){
+    if(!account.is_admin){
+      await log('clear-logs-auth','warn','ADMIN_REQUIRED',403);
+      return json(403,{error:'ADMIN_REQUIRED'});
+    }
+    const {data,error}=await db.rpc('activity_clear_debug_logs',{p_session:session});
+    if(error){
+      await log('clear-logs','error','CLEAR_LOGS_FAILED',500,`code=${clean(error.code)}; message=${clean(error.message)}`);
+      return json(500,{error:'CLEAR_LOGS_FAILED',detail:clean(error.message)});
+    }
+    return json(200,{cleared:Number(data||0)});
+  }
+
+  if(action==='save-settings'){
+    if(!account.is_admin){
+      await log('settings-auth','warn','ADMIN_REQUIRED',403);
+      return json(403,{error:'ADMIN_REQUIRED'});
+    }
+
+    const source=String(form.get('source')||'upload');
+    const title=String(form.get('title')||'').trim();
+    const caption=String(form.get('caption')||'').trim();
+    const ends=String(form.get('ends')||'').trim();
+    const prize=String(form.get('prize')||'').trim();
+    const enabled=String(form.get('enabled')||'false')==='true';
+
+    if(!['upload','github','direct'].includes(source)){
+      await log('settings-validate','error','INVALID_PRIZE_SOURCE',400,`source=${clean(source,40)}`);
+      return json(400,{error:'INVALID_PRIZE_SOURCE'});
+    }
+    if(source==='github' && (!prize || !githubPrize(prize))){
+      await log('settings-validate','error','INVALID_GITHUB_PRIZE_URL',400,`host=${prizeHost(prize)}`);
+      return json(400,{error:'INVALID_GITHUB_PRIZE_URL'});
+    }
+    if(source==='direct' && (!prize || !httpsPrize(prize))){
+      await log('settings-validate','error','INVALID_DIRECT_IMAGE_URL',400,`host=${prizeHost(prize)}`);
+      return json(400,{error:'INVALID_DIRECT_IMAGE_URL'});
+    }
+    if(source==='upload' && prize && !(directImage(prize)||supabasePrize(prize))){
+      await log('settings-validate','error','INVALID_UPLOADED_PRIZE_URL',400,`host=${prizeHost(prize)}`);
+      return json(400,{error:'INVALID_UPLOADED_PRIZE_URL'});
+    }
+
+    await log('settings-save','info','START',undefined,
+      `source=${source}; enabled=${enabled}; prize_host=${prize?prizeHost(prize):'none'}`);
+
+    const {data,error}=await db.rpc('activity_settings',{
+      p_session:session,
+      p_title:title,
+      p_enabled:enabled,
+      p_ends:ends||null,
+      p_caption:caption,
+      p_prize:prize||null
+    });
+
+    if(error){
+      const code=clean(error.message).match(/[A-Z][A-Z0-9_]{3,}/)?.[0]||'SETTINGS_SAVE_FAILED';
+      await log('settings-save','error',code,500,
+        `db_code=${clean(error.code)}; message=${clean(error.message)}; source=${source}; prize_host=${prize?prizeHost(prize):'none'}`);
+      return json(500,{error:code,detail:clean(error.message),dbCode:clean(error.code)});
+    }
+
+    await log('settings-save','info','OK',200,
+      `source=${source}; prize_host=${prize?prizeHost(prize):'none'}`);
+    return json(200,{campaign:data,source});
+  }
 
   if(action==='sign-proof'){
     if(!account.is_admin){
