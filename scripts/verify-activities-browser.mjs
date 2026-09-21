@@ -44,6 +44,8 @@ try{
    else if(path.endsWith('/rpc/activity_save_profile'))data={user_id:student,display_name:body.p_name,faculty:body.p_faculty,major:body.p_major};
    else if(path.endsWith('/rpc/activity_submit'))data=body.p_id;
    else if(path.endsWith('/rpc/activity_admin_queue'))data=role==='admin'?[{id:'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',status:'pending',photo_path:'https://i.ibb.co/test-proof/proof.png',submitted_at:'2026-09-20T00:00:00Z',reviewed_at:null,rejection_note:null,display_name:'ผู้เข้าร่วมทดสอบ',faculty:'วิทยาศาสตร์',major:'คอมพิวเตอร์'}]:[];
+   else if(path.endsWith('/rpc/activity_admin_logs'))data=role==='admin'?[{id:1,student_id:'1234567890',action:'activity-files',stage:'imgbb-upload',level:'error',code:'IMAGE_HOST_UPLOAD_FAILED',http_status:400,detail:'Invalid API key',created_at:'2026-09-20T00:00:00Z'}]:[];
+   else if(path.endsWith('/rpc/activity_clear_debug_logs'))data=1;
    else if(path.endsWith('/rpc/activity_review'))data=body.p_decision;
    else if(path.endsWith('/rpc/activity_settings'))data=campaign;
    else if(path.endsWith('/functions/v1/activity-files')){
@@ -112,6 +114,9 @@ try{
  const admin=await fixture('admin');
  await admin.page.goto('http://127.0.0.1:8766/admin.html');
  await admin.page.getByRole('button',{name:'ตรวจรูป'}).waitFor();
+ await admin.page.getByRole('heading',{name:'Activity / ImgBB Log'}).waitFor();
+ await admin.page.getByText('IMAGE_HOST_UPLOAD_FAILED · HTTP 400',{exact:true}).waitFor();
+ await admin.page.getByText('Invalid API key',{exact:true}).waitFor();
  await admin.page.screenshot({animations:'disabled',path:'verification/activity-admin.png',fullPage:true});
  await admin.page.getByRole('button',{name:'ตรวจรูป'}).click();
  await admin.page.locator('.a-proof').waitFor();
