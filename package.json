@@ -5,7 +5,8 @@
   "type": "module",
   "scripts": {
     "build": "node scripts/build.mjs",
-    "test:activities": "node scripts/verify-activities-db.mjs"
+    "test:activities": "node scripts/verify-activities-db.mjs",
+    "build:vercel": "node scripts/build-vercel.mjs"
   },
   "dependencies": {
     "@gsap/react": "^2.1.2",
