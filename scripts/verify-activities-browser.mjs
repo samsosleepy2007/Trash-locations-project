@@ -28,6 +28,8 @@ try{
   const context=await browser.newContext({viewport:{width:1280,height:1000}}),calls=[];
   if(role==='student'||role==='admin')await context.addInitScript(()=>localStorage.setItem('nrru-activity-student-session','test-session-token'));
   await context.route('**/activity-config.js',r=>r.fulfill({contentType:'text/javascript',body:"window.ACTIVITY_CONFIG={enabled:true,supabaseUrl:'https://activity-fixture.test',publishableKey:'test-only-public-key'}"}));
+  await context.route('https://api.github.com/repos/samsosleepy2007/Trash-locations-project/git/trees/main?recursive=1',r=>r.fulfill({status:200,contentType:'application/json',body:JSON.stringify({tree:[{type:'blob',path:'image/nrru-logo.png'},{type:'blob',path:'image/map.jpeg'},{type:'blob',path:'README.md'}]})}));
+  await context.route('https://raw.githubusercontent.com/samsosleepy2007/Trash-locations-project/main/image/**',async r=>r.fulfill({status:200,contentType:'image/png',body:await readFile('image/nrru-logo.png')}));
   await context.route('https://activity-fixture.test/**',async r=>{
    const req=r.request(),url=new URL(req.url()),path=url.pathname,content=req.postData()||'';
    let body=null;try{body=req.postDataJSON();}catch{}
