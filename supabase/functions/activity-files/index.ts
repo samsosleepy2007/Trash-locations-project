@@ -5,6 +5,7 @@ const allowedOrigins = new Set([
   'http://127.0.0.1:8766',
   'http://localhost:8766'
 ]);
+const allowedOrigin = (origin:string) => allowedOrigins.has(origin) || /^https:\/\/[a-z0-9-]+\.vercel\.app$/i.test(origin);
 
 const directImage = (value: string) => /^https:\/\/i\.ibb\.co\/\S+$/.test(value);
 const githubPrize = (value: string) => /^https:\/\/raw\.githubusercontent\.com\/samsosleepy2007\/Trash-locations-project\/main\/\S+\.(png|jpg|jpeg|webp)$/i.test(value);
@@ -19,7 +20,7 @@ const extensionFor = (mime:string) => mime==='image/png'?'png':mime==='image/web
 Deno.serve(async request => {
   const origin=request.headers.get('Origin') || '';
   const cors={
-    'Access-Control-Allow-Origin':allowedOrigins.has(origin)?origin:'https://samsosleepy2007.github.io',
+    'Access-Control-Allow-Origin':allowedOrigin(origin)?origin:'https://samsosleepy2007.github.io',
     'Access-Control-Allow-Headers':'content-type, apikey, x-activity-session',
     'Access-Control-Allow-Methods':'POST, OPTIONS',
     'Vary':'Origin'
