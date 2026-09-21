@@ -67,6 +67,7 @@ assert.equal(debugRows.length,1);
 assert.equal(debugRows[0].code,'IMAGE_HOST_UPLOAD_FAILED');
 assert.equal(debugRows[0].student_id,'1234567890');
 assert.equal(row(await rpc('select activity_clear_debug_logs($1) as n',[admin.session_token])).n,1);
+assert.equal(row(await db.query("select position('where id is not null' in lower(prosrc))>0 as ok from pg_proc p join pg_namespace n on n.oid=p.pronamespace where n.nspname='activity_private' and p.proname='clear_debug_logs' limit 1")).ok,true);
 
 const campaign=row(await db.query('select id from activity_campaigns')).id;
 await denied('anon',"select activity_settings($1,'ทดสอบ',true,now()+interval '1 day','รางวัล',null)",[login.session_token],/ADMIN_REQUIRED/);
@@ -87,6 +88,7 @@ await rpc("select activity_settings($1,'ทดสอบ',true,now()+interval '1 
 assert.equal(row(await db.query('select prize_path from activity_campaigns where id=$1',[campaign])).prize_path,directPrize);
 assert.equal(row(await db.query("select to_regprocedure('public.activity_settings(text,boolean,timestamptz,text,text)') is null as gone")).gone,true);
 assert.equal(row(await db.query("select to_regprocedure('activity_private.settings(text,boolean,timestamptz,text,text)') is null as gone")).gone,true);
+assert.equal(row(await db.query("select position('where singleton = true' in lower(prosrc))>0 as ok from pg_proc p join pg_namespace n on n.oid=p.pronamespace where n.nspname='activity_private' and p.proname='settings' and p.pronargs=6 limit 1")).ok,true);
 
 async function submit(n){
  const id=`aaaaaaaa-aaaa-4aaa-8aaa-${String(n).padStart(12,'0')}`;
@@ -133,4 +135,4 @@ await denied('anon',"select * from activity_own_history($1)",[login.session_toke
 await denied('anon',"select activity_settings($1,'ทดสอบ',true,now()-interval '1 hour','รางวัล',null)",[admin.session_token],/END_TIME_MUST_BE_FUTURE/);
 
 await db.close();
-console.log('PASS: student ID auth, uploaded + GitHub + direct prize images, legacy settings overload cleanup, private logs, automatic campaign deadline, immutable profiles, admin review and leaderboard.');
+console.log('PASS: safeupdate-compatible admin functions, student ID auth, uploaded + GitHub + direct prize images, legacy settings overload cleanup, private logs, automatic campaign deadline, immutable profiles, admin review and leaderboard.');
