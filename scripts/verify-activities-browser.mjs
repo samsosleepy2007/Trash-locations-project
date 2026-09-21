@@ -27,6 +27,7 @@ try{
  async function fixture(role,{saved=false,closed=false,campaignDraft=false}={}){
   const context=await browser.newContext({viewport:{width:1280,height:1000}}),calls=[];
   let debugLogs=role==='admin'?[{id:1,student_id:'1234567890',action:'activity-files',stage:'imgbb-upload',level:'error',code:'IMAGE_HOST_UPLOAD_FAILED',http_status:400,detail:'Invalid API key',created_at:'2026-09-20T00:00:00Z'}]:[];
+  let currentEnabled=campaignDraft?false:!closed;
   if(role==='student'||role==='admin')await context.addInitScript(()=>localStorage.setItem('nrru-activity-student-session','test-session-token'));
   await context.route('**/activity-config.js',r=>r.fulfill({contentType:'text/javascript',body:"window.ACTIVITY_CONFIG={enabled:true,supabaseUrl:'https://activity-fixture.test',publishableKey:'test-only-public-key'}"}));
   await context.route('https://api.github.com/repos/samsosleepy2007/Trash-locations-project/git/trees/main?recursive=1',r=>r.fulfill({status:200,contentType:'application/json',body:JSON.stringify({tree:[{type:'blob',path:'image/nrru-logo.png'},{type:'blob',path:'image/map.jpeg'},{type:'blob',path:'README.md'}]})}));
@@ -37,7 +38,7 @@ try{
    let body=null;try{body=req.postDataJSON();}catch{}
    calls.push({path,body,content});let data={};
 
-   if(path==='/rest/v1/activity_campaigns')data=campaignDraft?{...campaign,enabled:false,ends_at:null}:({...campaign,enabled:!closed,ends_at:closed?'2020-01-01T00:00:00Z':campaign.ends_at});
+   if(path==='/rest/v1/activity_campaigns')data={...campaign,enabled:currentEnabled,ends_at:campaignDraft?null:(closed?'2020-01-01T00:00:00Z':campaign.ends_at),updated_at:new Date().toISOString()};
    else if(path.endsWith('/rpc/activity_leaderboard'))data=[];
    else if(path.endsWith('/rpc/activity_login'))data=[{session_token:'login-session',user_id:student,student_id:'6940108219',is_admin:false}];
    else if(path.endsWith('/rpc/activity_register'))data=[{session_token:'register-session',user_id:student,student_id:'6940108219',is_admin:false}];
@@ -52,7 +53,8 @@ try{
    else if(path.endsWith('/rpc/activity_review'))data=body.p_decision;
    else if(path.endsWith('/functions/v1/activity-files')){
     if(content.includes('clear-logs')){const n=debugLogs.length;debugLogs=[];data={cleared:n};}
-    else if(content.includes('save-settings')){const source=content.includes('direct')?'direct':content.includes('github')?'github':'upload';debugLogs=[{id:2,student_id:'6940108219',action:'activity-files',stage:'settings-save',level:'info',code:'OK',http_status:200,detail:`source=${source}`,created_at:'2026-09-21T00:00:00Z'},...debugLogs];data={campaign,source};}
+    else if(content.includes('cancel-campaign')){currentEnabled=false;debugLogs=[{id:3,student_id:'6940108219',action:'activity-files',stage:'campaign-cancel',level:'info',code:'OK',http_status:200,detail:'enabled=false',created_at:'2026-09-21T00:00:00Z'},...debugLogs];data={cancelled:true,campaign:{...campaign,enabled:false}};}
+    else if(content.includes('save-settings')){const source=content.includes('direct')?'direct':content.includes('github')?'github':'upload';if(content.includes('name="enabled"')&&content.includes('\r\n\r\ntrue'))currentEnabled=true;debugLogs=[{id:2,student_id:'6940108219',action:'activity-files',stage:'settings-save',level:'info',code:'OK',http_status:200,detail:`source=${source}`,created_at:'2026-09-21T00:00:00Z'},...debugLogs];data={campaign:{...campaign,enabled:currentEnabled},source};}
     else if(content.includes('sign-proof'))data={signedUrl:'http://127.0.0.1:8766/image/nrru-logo.png'};
     else if(content.includes('upload-prize'))data={path:'https://i.ibb.co/test-prize/prize.png'};
     else data={id:'cccccccc-cccc-4ccc-8ccc-cccccccccccc',path:'https://i.ibb.co/test-proof/proof.png'};
@@ -138,9 +140,28 @@ try{
  assert.equal(admin.calls.find(x=>x.path.endsWith('/rpc/activity_review')).body.p_decision,'approved');
  await admin.context.close();
 
+ const cancelAdmin=await fixture('admin');
+ await cancelAdmin.page.goto('http://127.0.0.1:8766/admin.html');
+ await cancelAdmin.page.getByRole('heading',{name:'รายละเอียดกิจกรรม',exact:true}).waitFor();
+ assert.equal(await cancelAdmin.page.getByLabel('ชื่อกิจกรรม',{exact:true}).count(),0);
+ await cancelAdmin.page.getByRole('button',{name:'แก้รายละเอียดกิจกรรม',exact:true}).click();
+ await cancelAdmin.page.getByLabel('ชื่อกิจกรรม',{exact:true}).waitFor();
+ await cancelAdmin.page.getByRole('button',{name:'ยกเลิกการแก้ไข',exact:true}).click();
+ assert.equal(await cancelAdmin.page.getByLabel('ชื่อกิจกรรม',{exact:true}).count(),0);
+ await cancelAdmin.page.getByRole('button',{name:'ยกเลิกกิจกรรม',exact:true}).click();
+ await cancelAdmin.page.getByRole('heading',{name:'ยกเลิกกิจกรรม',exact:true}).waitFor();
+ await cancelAdmin.page.getByRole('button',{name:'ยืนยันยกเลิกกิจกรรม',exact:true}).click();
+ await cancelAdmin.page.getByText('ยกเลิกกิจกรรมแล้ว · ปิดรับการส่งใหม่ทันที',{exact:true}).waitFor();
+ await cancelAdmin.page.getByText('ปิดรับ',{exact:true}).waitFor();
+ assert.equal(cancelAdmin.calls.filter(x=>x.path.endsWith('/functions/v1/activity-files')&&x.content.includes('cancel-campaign')).length,1);
+ await cancelAdmin.context.close();
+
  const draft=await fixture('admin',{campaignDraft:true});
  await draft.page.goto('http://127.0.0.1:8766/admin.html');
- await draft.page.getByRole('heading',{name:'ตั้งค่ากิจกรรม'}).waitFor();
+ await draft.page.getByRole('heading',{name:'รายละเอียดกิจกรรม'}).waitFor();
+ assert.equal(await draft.page.getByRole('button',{name:'ยกเลิกกิจกรรม',exact:true}).count(),0);
+ await draft.page.getByRole('button',{name:'แก้รายละเอียดกิจกรรม',exact:true}).click();
+ await draft.page.getByRole('heading',{name:'แก้รายละเอียดกิจกรรม'}).waitFor();
  const endInput=draft.page.getByLabel('วันและเวลาสิ้นสุด (เวลาไทย)',{exact:true});
  assert.ok((await endInput.inputValue()).length>=16);
  await draft.page.getByRole('button',{name:'เลือกจาก GitHub',exact:true}).click();
@@ -159,6 +180,7 @@ try{
 
  const direct=await fixture('admin',{campaignDraft:true});
  await direct.page.goto('http://127.0.0.1:8766/admin.html');
+ await direct.page.getByRole('button',{name:'แก้รายละเอียดกิจกรรม',exact:true}).click();
  await direct.page.getByRole('button',{name:'Direct Image URL',exact:true}).click();
  await direct.page.getByLabel('Direct Image URL',{exact:true}).fill('https://cdn.example.test/reward?id=7');
  await direct.page.getByAltText('ตัวอย่างรูปจาก Direct Image URL').waitFor();
@@ -176,5 +198,5 @@ try{
  await closed.context.close();
 
  assert.deepEqual(errors,[]);
- console.log('PASS: admin edge actions, clear logs, GitHub + direct prize URLs, ImgBB fallback, automatic campaign deadline, first submission, locked profile, admin review and closed campaign.');
+ console.log('PASS: campaign edit/cancel controls, admin edge actions, clear logs, GitHub + direct prize URLs, ImgBB fallback, automatic campaign deadline, first submission, locked profile, admin review and closed campaign.');
 }finally{await browser?.close();await new Promise(r=>server.close(r));}
