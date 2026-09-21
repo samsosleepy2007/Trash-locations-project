@@ -45,7 +45,9 @@ export function readableError(error){
   INVALID_DIRECT_IMAGE_URL:'Direct Image URL ต้องเป็นลิงก์ HTTPS ที่เปิดรูปได้โดยตรง',
   INVALID_UPLOADED_PRIZE_URL:'ลิงก์รูปที่อัปโหลดไม่ใช่ URL จากระบบอัปโหลด',
   SETTINGS_SAVE_FAILED:'บันทึกการตั้งค่ากิจกรรมไม่สำเร็จ',
-  CLEAR_LOGS_FAILED:'ล้าง Debug Log ไม่สำเร็จ'
+  CLEAR_LOGS_FAILED:'ล้าง Debug Log ไม่สำเร็จ',
+  CAMPAIGN_CANCEL_FAILED:'ยกเลิกกิจกรรมไม่สำเร็จ',
+  CAMPAIGN_NOT_FOUND:'ไม่พบกิจกรรมที่ต้องการจัดการ'
  };
  for(const [code,message] of Object.entries(messages))if(text.includes(code))return message;
  if(/fetch|network/i.test(text))return 'เชื่อมต่อไม่สำเร็จ กรุณาตรวจอินเทอร์เน็ตแล้วลองใหม่';
@@ -119,6 +121,7 @@ export const signProof=path=>fileAction('sign-proof',{path});
 export const uploadPrize=file=>fileAction('upload-prize',{file});
 
 export const clearAdminLogs=()=>fileAction('clear-logs');
+export const cancelCampaign=()=>fileAction('cancel-campaign');
 export const saveSettings=({title,enabled,ends,caption,prize,source='upload'})=>fileAction('save-settings',{fields:{title,enabled,ends:ends||'',caption,prize:prize||'',source}});
 export function readableAdminError(error){
  const raw=String(error?.message||error||'').replace(/[\r\n\t]+/g,' ').slice(0,320);

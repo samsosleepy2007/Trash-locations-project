@@ -18,6 +18,15 @@ jobs:
       - run: npm run build
       - run: node scripts/verify-activities-db.mjs
       - run: git diff --exit-code -- assets
+      - run: npm run build:vercel
+      - name: Verify Vercel static output
+        run: |
+          test -f dist/index.html
+          test -f dist/activity.html
+          test -f dist/admin.html
+          test -f dist/activity-config.js
+          test -d dist/assets
+          test -d dist/image
       - run: npx playwright install --with-deps chromium
       - run: sudo apt-get install -y fonts-noto-core
       - run: node scripts/verify.mjs
