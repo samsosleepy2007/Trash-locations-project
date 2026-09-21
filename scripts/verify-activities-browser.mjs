@@ -147,6 +147,7 @@ try{
  const settingsCall=draft.calls.find(x=>x.path.endsWith('/rpc/activity_settings'));
  assert.equal(settingsCall.body.p_enabled,true);
  assert.ok(settingsCall.body.p_ends);
+ assert.equal(settingsCall.body.p_prize,'https://raw.githubusercontent.com/samsosleepy2007/Trash-locations-project/main/image/nrru-logo.png');
  assert.ok(new Date(settingsCall.body.p_ends).getTime()>Date.now());
  await draft.context.close();
 
@@ -157,5 +158,5 @@ try{
  await closed.context.close();
 
  assert.deepEqual(errors,[]);
- console.log('PASS: generic student login UI, ImgBB direct URLs, automatic campaign deadline, first submission, locked profile, admin review and closed campaign.');
+ console.log('PASS: generic student login UI, GitHub prize picker, ImgBB fallback, automatic campaign deadline, first submission, locked profile, admin review and closed campaign.');
 }finally{await browser?.close();await new Promise(r=>server.close(r));}
