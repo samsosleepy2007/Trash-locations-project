@@ -78,6 +78,50 @@ Deno.serve(async request => {
     return json(200,{cleared:Number(data||0)});
   }
 
+  if(action==='cancel-campaign'){
+    if(!account.is_admin){
+      await log('campaign-cancel-auth','warn','ADMIN_REQUIRED',403);
+      return json(403,{error:'ADMIN_REQUIRED'});
+    }
+
+    await log('campaign-cancel','info','START');
+    const {data:campaign,error:campaignError}=await db
+      .from('activity_campaigns')
+      .select('title,enabled,ends_at,prize_caption,prize_path')
+      .eq('singleton',true)
+      .single();
+
+    if(campaignError||!campaign){
+      await log('campaign-cancel','error','CAMPAIGN_NOT_FOUND',500,clean(campaignError?.message));
+      return json(500,{error:'CAMPAIGN_NOT_FOUND',detail:clean(campaignError?.message)});
+    }
+
+    if(!campaign.enabled){
+      await log('campaign-cancel','info','ALREADY_CANCELLED',200);
+      return json(200,{cancelled:false,alreadyCancelled:true,campaign});
+    }
+
+    const {data,error}=await db.rpc('activity_settings',{
+      p_session:session,
+      p_title:campaign.title,
+      p_enabled:false,
+      p_ends:campaign.ends_at,
+      p_caption:campaign.prize_caption,
+      p_prize:campaign.prize_path
+    });
+
+    if(error){
+      const message=clean(error.message);
+      const known=message.match(/\b(?:ADMIN_REQUIRED|INVALID_PRIZE_URL|PRIZE_IMAGE_NOT_FOUND|CAMPAIGN_NOT_FOUND)\b/)?.[0];
+      const code=known||(String(error.code)==='21000'?'SAFEUPDATE_BLOCKED':'CAMPAIGN_CANCEL_FAILED');
+      await log('campaign-cancel','error',code,500,`db_code=${clean(error.code)}; message=${message}`);
+      return json(500,{error:code,detail:message,dbCode:clean(error.code)});
+    }
+
+    await log('campaign-cancel','info','OK',200,'enabled=false; existing submissions and leaderboard retained');
+    return json(200,{cancelled:true,campaign:data});
+  }
+
   if(action==='save-settings'){
     if(!account.is_admin){
       await log('settings-auth','warn','ADMIN_REQUIRED',403);
