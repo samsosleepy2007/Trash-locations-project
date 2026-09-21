@@ -137,6 +137,9 @@ try{
  await draft.page.getByRole('heading',{name:'ตั้งค่ากิจกรรม'}).waitFor();
  const endInput=draft.page.getByLabel('วันและเวลาสิ้นสุด (เวลาไทย)',{exact:true});
  assert.ok((await endInput.inputValue()).length>=16);
+ await draft.page.getByRole('button',{name:'เลือกจาก GitHub',exact:true}).click();
+ await draft.page.getByRole('button',{name:/nrru-logo\.png/}).click();
+ assert.match(await draft.page.getByLabel('GitHub Raw URL',{exact:true}).inputValue(),/raw\.githubusercontent\.com\/samsosleepy2007\/Trash-locations-project\/main\/image\/nrru-logo\.png$/);
  const enableBox=draft.page.getByLabel('เปิดรับการส่งกิจกรรม',{exact:true});
  await enableBox.check();
  await draft.page.getByRole('button',{name:'บันทึกการตั้งค่า',exact:true}).click();
