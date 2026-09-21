@@ -1,0 +1,25 @@
+name: Verify direct URL admin branch
+on:
+  push:
+    branches:
+      - fix/admin-actions-direct-url
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+      - run: node scripts/verify-activities-db.mjs
+      - run: git diff --exit-code -- assets
+      - run: npx playwright install --with-deps chromium
+      - run: sudo apt-get install -y fonts-noto-core
+      - run: node scripts/verify.mjs
+      - run: node scripts/verify-activities-browser.mjs
